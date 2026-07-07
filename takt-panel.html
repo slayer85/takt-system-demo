@@ -16,12 +16,12 @@
 <script>
 // ═══════════ KONFIGURACJA SZKOŁY (TAKT) — jeden blok dla całego panelu ═══════════
 const TAKT_CONFIG = {
-  schoolName:         'Studio Demo TAKT',
-  schoolId:           'demo',                          // krótki id: 'senso','team'… — namespace localStorage + nazwa backupu
-  supabaseUrl:        'https://ecoqpvfcumflkyluylcr.supabase.co',
-  supabaseAnonKey:    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3FwdmZjdW1mbGt5bHV5bGNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjU1MzAsImV4cCI6MjA5OTAwMTUzMH0.7wg2QXe0ETKhEWVZSgZdv2Nzi99HEuplGGD70rP6e4g',
+  schoolName:         'Nazwa Szkoły Tańca',
+  schoolId:           'szkola',                          // krótki id: 'senso','team'… — namespace localStorage + nazwa backupu
+  supabaseUrl:        'https://TWOJ-PROJEKT.supabase.co',
+  supabaseAnonKey:    'WKLEJ_ANON_KEY',
   logo:               '',                                // 'data:image/png;base64,...' lub URL; '' = bez logo
-  couplesUrl:         'https://slayer85.github.io/takt-system-demo/demo/',
+  couplesUrl:         'https://TWOJA-SZKOLA.github.io/zapisy/',
   defaultLessonPrice: 120,
   syncMode:           'local',                           // 'local' (Model A) | 'encrypted-cloud' (Model B)
   bankProfile:        'auto',                            // 'auto' | 'ing' | 'generic' | 'mt940'
@@ -32,31 +32,6 @@ const LS_PREFIX = 'takt_' + (TAKT_CONFIG.schoolId || 'default') + '_';
 function LSget(k){ return localStorage.getItem(LS_PREFIX + k); }
 function LSset(k, v){ return localStorage.setItem(LS_PREFIX + k, v); }
 function LSdel(k){ return localStorage.removeItem(LS_PREFIX + k); }
-// SEED DEMO — przykładowi uczestnicy + wpłaty (tylko schoolId==='demo', gdy pusto)
-(function demoSeed(){
-  if (TAKT_CONFIG.schoolId !== 'demo') return;
-  if (localStorage.getItem(LS_PREFIX + 'taniec_db_v2')) return;
-  var db = {
-    participants: [
-      {id:'p1',firstName:'Anna',lastName:'Kowalska',group:'Hobby LA'},
-      {id:'p2',firstName:'Piotr',lastName:'Nowak',group:'Hobby LA'},
-      {id:'p3',firstName:'Maja',lastName:'Wiśniewska',group:'Hobby LA'},
-      {id:'p4',firstName:'Jan',lastName:'Wójcik',group:'Sport ST'},
-      {id:'p5',firstName:'Zofia',lastName:'Kaczmarek',group:'Sport ST'},
-      {id:'p6',firstName:'Kacper',lastName:'Lewandowski',group:'Sport ST'}
-    ],
-    payments: { '2026-07': [
-      {participantId:'p1',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true},
-      {participantId:'p2',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true},
-      {participantId:'p4',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true},
-      {participantId:'p5',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true}
-    ]},
-    trainers: ['Nagórski','Bandelewicz'],
-    lessons: [], coaches: [], trainings: [], nicknames: {},
-    pendingReview: {}, confirmedNoPayment: {}, cloud: {}
-  };
-  localStorage.setItem(LS_PREFIX + 'taniec_db_v2', JSON.stringify(db));
-})();
 // Wykrywanie trybu: mobile (telefon/tablet) vs desktop; ręczny wybór ma priorytet.
 function taktMode(){
   const o = localStorage.getItem(LS_PREFIX + 'mode');
@@ -814,11 +789,16 @@ document.addEventListener('DOMContentLoaded', taktBoot);
 <!-- MODAL: Trenerzy -->
 <div class="modal-backdrop" id="trainersModal">
   <div class="modal" style="max-width:440px">
-    <h3>Trenerzy</h3>
+    <h3>Trenerzy i cena lekcji</h3>
     <div class="form-group">
       <label>Lista trenerów <span style="font-weight:400;color:var(--text-muted)">— jeden na linię</span></label>
       <textarea id="tTrainers" style="min-height:130px;font-size:.88rem;line-height:1.6" placeholder="Trener 1&#10;Trener 2&#10;Trener 3"></textarea>
       <div class="hint">Na razie oznaczenia tymczasowe (Trener 1, Trener 2…). Można wpisać prawdziwe imiona.</div>
+    </div>
+    <div class="form-group">
+      <label>Cena lekcji indywidualnej (zł) <span style="font-weight:400;color:var(--text-muted)">— jedna dla wszystkich trenerów</span></label>
+      <input type="number" id="tLessonPrice" min="0" step="10" style="width:140px">
+      <div class="hint">Dotyczy lekcji Czw/Pt i dni dodatkowych (nie szkoleń weekendowych — te mają własne stawki). Zmiana wymaga połączenia z chmurą i PIN-u trenera; obowiązuje dla nowo publikowanych lekcji.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('trainersModal')">Anuluj</button>
@@ -1322,7 +1302,7 @@ function saveLesson() {
   const ns = toMin(start), ne = ns + 45;
   const clash = db.lessons.find(l => l.trainer === trainer && l.date === date && (() => { const es = toMin(l.start), ee = es + 45; return ns < ee && es < ne; })());
   if (clash) { alert(`${trainer} ma już lekcję ${clash.start} – ${addMinutes(clash.start, 45)} tego dnia. Wybierz godzinę, która się nie nakłada.`); return; }
-  db.lessons.push({ id: uid(), day, date, trainer, style, start, pair: '', people: 2, paid: false, bookedBy: '', bookedAt: null, kind: 'weekly', price: TAKT_CONFIG.defaultLessonPrice });
+  db.lessons.push({ id: uid(), day, date, trainer, style, start, pair: '', people: 2, paid: false, bookedBy: '', bookedAt: null, kind: 'weekly', price: lessonPriceNow() });
   saveDb();
   closeModal('lessonModal');
   renderGrafik();
@@ -1420,17 +1400,45 @@ async function unbookLesson(id) {
   if (error) alert('Parę wypisano lokalnie, ale nie udało się zwolnić terminu w chmurze: ' + (error.message || error));
 }
 
+// Aktualna cena lekcji indywidualnej (lokalny cache z chmury; fallback config → 120)
+function lessonPriceNow() {
+  if (db.lessonPrice != null) return db.lessonPrice;
+  return (TAKT_CONFIG.defaultLessonPrice != null) ? TAKT_CONFIG.defaultLessonPrice : 120;
+}
+async function fetchLessonPrice() {
+  const sb = getSb();
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.rpc('get_lesson_price');
+    if (!error && data != null && db.lessonPrice !== data) { db.lessonPrice = data; saveDb(); renderGrafik(); }
+  } catch (e) { /* offline — zostaje cache/fallback */ }
+}
+
 function openTrainersModal() {
   document.getElementById('tTrainers').value = db.trainers.join('\n');
+  document.getElementById('tLessonPrice').value = lessonPriceNow();
   openModal('trainersModal');
 }
 
-function saveTrainers() {
+async function saveTrainers() {
   const list = document.getElementById('tTrainers').value
     .split('\n').map(s => s.trim()).filter(Boolean);
   db.trainers = list.length ? list : ['Trener 1'];
+  const newPrice = parseInt(document.getElementById('tLessonPrice').value, 10);
   saveDb();
   closeModal('trainersModal');
+  // zmiana ceny — tylko przez chmurę (config po stronie serwera, PIN trenera)
+  if (!isNaN(newPrice) && newPrice >= 0 && newPrice !== lessonPriceNow()) {
+    const sb = getSb();
+    if (sb && db.cloud && db.cloud.trainerPin) {
+      const { error } = await sb.rpc('set_lesson_price', { p_pin: db.cloud.trainerPin, p_price: newPrice });
+      if (error) { alert('Trenerzy zapisani, ale nie udało się zmienić ceny: ' + (error.message || error)); }
+      else { db.lessonPrice = newPrice; saveDb(); }
+    } else {
+      alert('Trenerzy zapisani. Zmiana ceny wymaga połączenia z chmurą i PIN-u trenera (kliknij status chmury).');
+    }
+  }
+  renderGrafik();
 }
 
 // ---- SYNCHRONIZACJA Z CHMURĄ (Supabase) ----
@@ -1463,6 +1471,7 @@ async function checkCloud() {
   updateCloudStatusUI('checking');
   const { error } = await sb.from('lessons').select('id').limit(1);
   updateCloudStatusUI(error ? 'offline' : 'online');
+  if (!error) fetchLessonPrice();  // zsynchronizuj cenę lekcji z chmury
 }
 
 function openCloudModal() {
@@ -1489,7 +1498,8 @@ async function publishWeek() {
   // z chmury cały tydzień kind='weekly' spoza listy, więc lista musi być kompletna.
   const days = grafikWeekDates();
   const slots = db.lessons.filter(l => (l.kind || 'weekly') === 'weekly' && days.includes(l.date)).map(l => ({
-    id: l.id, date: l.date, weekday: l.day, trainer: l.trainer, style: l.style, start_time: l.start
+    id: l.id, date: l.date, weekday: l.day, trainer: l.trainer, style: l.style, start_time: l.start,
+    price: (l.price != null) ? l.price : lessonPriceNow()
   }));
   if (!slots.length && !confirm('Brak lekcji w tym tygodniu — opublikować pusty grafik (usunie zdalne sloty tego tygodnia)?')) return;
   const { error } = await sb.rpc('publish_slots', { p_pin: db.cloud.trainerPin, p_week_start: fmtDate(monday), p_slots: slots });
@@ -4243,6 +4253,7 @@ const SUPABASE_ANON = TAKT_CONFIG.supabaseAnonKey;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 let pin = '', week = 0, lessons = [], currentId = null, curPeople = 2, curStyle = 'LA', addDate = null;
+let lessonPrice = 120;   // cena lekcji indywidualnej (z chmury, get_lesson_price)
 
 // ---- daty ----
 function fmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -4302,6 +4313,7 @@ async function load(){
   dot.className='dot on'; st.textContent='Połączono — zmiany widać na żywo';
   lessons = data || [];
   render();
+  sb.rpc('get_lesson_price').then(r => { if(!r.error && r.data != null) lessonPrice = r.data; });
 }
 
 function render(){
@@ -4395,7 +4407,7 @@ function openAdd(date){
   document.getElementById('aDayRow').style.display='none';
   setStyle('LA');
   document.getElementById('aTime').value='16:00';
-  document.getElementById('addInfo').textContent = dayName(date)+' '+fmtDM(date)+' · lekcja indywidualna 45 min · 120 zł';
+  document.getElementById('addInfo').textContent = dayName(date)+' '+fmtDM(date)+' · lekcja indywidualna 45 min · '+lessonPrice+' zł';
   openModal('addModal');
 }
 // Lekcja w dniu, którego nie ma jeszcze na liście (np. święto w środę) — wybór dnia w modalu.
@@ -4408,7 +4420,7 @@ function openAddAnyDay(){
   document.getElementById('aDayRow').style.display='';
   setStyle('LA');
   document.getElementById('aTime').value='16:00';
-  document.getElementById('addInfo').textContent='lekcja indywidualna 45 min · 120 zł';
+  document.getElementById('addInfo').textContent='lekcja indywidualna 45 min · '+lessonPrice+' zł';
   openModal('addModal');
 }
 async function confirmAdd(){
@@ -4423,9 +4435,10 @@ async function confirmAdd(){
     (()=>{ const es=toMin(l.start_time), ee=es+45; return ns<ee && es<ne; })());
   if(clash){ toast(trainer+' ma już lekcję '+clash.start_time+' – '+addMinutes(clash.start_time,45)+' tego dnia.', true); return; }
   const weekly=lessons.filter(l=>(l.kind||'weekly')==='weekly').map(l=>({
-    id:l.id, date:l.date, weekday:l.weekday, trainer:l.trainer, style:l.style, start_time:l.start_time }));
+    id:l.id, date:l.date, weekday:l.weekday, trainer:l.trainer, style:l.style, start_time:l.start_time,
+    price:(l.price!=null?l.price:lessonPrice) }));
   weekly.push({ id:uid(), date:date, weekday:WD_SLUG[parseDate(date).getDay()],
-    trainer:trainer, style:curStyle, start_time:time });
+    trainer:trainer, style:curStyle, start_time:time, price:lessonPrice });
   const { error } = await sb.rpc('publish_slots', { p_pin: pin, p_week_start: fmtDate(mondayOf(week)), p_slots: weekly });
   if(error){ toast('Nie udało się dodać: '+(error.message||error), true); return; }
   closeModal('addModal'); toast('Dodano lekcję '+dayName(date)+' '+time); load();
