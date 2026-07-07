@@ -16,12 +16,12 @@
 <script>
 // ═══════════ KONFIGURACJA SZKOŁY (TAKT) — jeden blok dla całego panelu ═══════════
 const TAKT_CONFIG = {
-  schoolName:         'Nazwa Szkoły Tańca',
-  schoolId:           'szkola',                          // krótki id: 'senso','team'… — namespace localStorage + nazwa backupu
-  supabaseUrl:        'https://TWOJ-PROJEKT.supabase.co',
-  supabaseAnonKey:    'WKLEJ_ANON_KEY',
+  schoolName:         'Studio Demo TAKT',
+  schoolId:           'demo',                          // krótki id: 'senso','team'… — namespace localStorage + nazwa backupu
+  supabaseUrl:        'https://ecoqpvfcumflkyluylcr.supabase.co',
+  supabaseAnonKey:    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjb3FwdmZjdW1mbGt5bHV5bGNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjU1MzAsImV4cCI6MjA5OTAwMTUzMH0.7wg2QXe0ETKhEWVZSgZdv2Nzi99HEuplGGD70rP6e4g',
   logo:               '',                                // 'data:image/png;base64,...' lub URL; '' = bez logo
-  couplesUrl:         'https://TWOJA-SZKOLA.github.io/zapisy/',
+  couplesUrl:         'https://slayer85.github.io/takt-system-demo/demo/',
   defaultLessonPrice: 120,
   syncMode:           'local',                           // 'local' (Model A) | 'encrypted-cloud' (Model B)
   bankProfile:        'auto',                            // 'auto' | 'ing' | 'generic' | 'mt940'
@@ -32,6 +32,31 @@ const LS_PREFIX = 'takt_' + (TAKT_CONFIG.schoolId || 'default') + '_';
 function LSget(k){ return localStorage.getItem(LS_PREFIX + k); }
 function LSset(k, v){ return localStorage.setItem(LS_PREFIX + k, v); }
 function LSdel(k){ return localStorage.removeItem(LS_PREFIX + k); }
+// SEED DEMO — przykładowi uczestnicy + wpłaty (tylko schoolId==='demo', gdy pusto)
+(function demoSeed(){
+  if (TAKT_CONFIG.schoolId !== 'demo') return;
+  if (localStorage.getItem(LS_PREFIX + 'taniec_db_v2')) return;
+  var db = {
+    participants: [
+      {id:'p1',firstName:'Anna',lastName:'Kowalska',group:'Hobby LA'},
+      {id:'p2',firstName:'Piotr',lastName:'Nowak',group:'Hobby LA'},
+      {id:'p3',firstName:'Maja',lastName:'Wiśniewska',group:'Hobby LA'},
+      {id:'p4',firstName:'Jan',lastName:'Wójcik',group:'Sport ST'},
+      {id:'p5',firstName:'Zofia',lastName:'Kaczmarek',group:'Sport ST'},
+      {id:'p6',firstName:'Kacper',lastName:'Lewandowski',group:'Sport ST'}
+    ],
+    payments: { '2026-07': [
+      {participantId:'p1',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true},
+      {participantId:'p2',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true},
+      {participantId:'p4',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true},
+      {participantId:'p5',title:'Gotówka DEMO',savedAt:'2026-07-01T09:00:00.000Z',manual:true}
+    ]},
+    trainers: ['Trener 1','Trener 2'],
+    lessons: [], coaches: [], trainings: [], nicknames: {},
+    pendingReview: {}, confirmedNoPayment: {}, cloud: {}
+  };
+  localStorage.setItem(LS_PREFIX + 'taniec_db_v2', JSON.stringify(db));
+})();
 // Wykrywanie trybu: mobile (telefon/tablet) vs desktop; ręczny wybór ma priorytet.
 function taktMode(){
   const o = localStorage.getItem(LS_PREFIX + 'mode');
@@ -60,11 +85,50 @@ function taktBoot(){
   const lbl = document.getElementById('taktToggleLbl');
   if (lbl) lbl.textContent = mode === 'mobile' ? '🖥 Pełny widok' : '📱 Widok mobilny';
 }
-document.addEventListener('DOMContentLoaded', taktBoot);
+// ── LOGOWANIE TRENERA (Supabase Auth) — jeden klient dla całego panelu ──
+const _auth = supabase.createClient(TAKT_CONFIG.supabaseUrl, TAKT_CONFIG.supabaseAnonKey);
+window.TAKT_SB = _auth;            // oba widoki używają tego (zalogowanego) klienta
+window.taktLogout = function(){ _auth.auth.signOut().then(function(){ location.reload(); }); };
+function _taktShowApp(){
+  document.getElementById('taktLogin').style.display = 'none';
+  document.getElementById('taktToggle').style.display = '';
+  document.getElementById('taktLogoutBtn').style.display = '';
+  window.TAKT_AUTHED = true;
+  taktBoot();
+}
+async function taktLogin(){
+  const email = document.getElementById('taktEmail').value.trim();
+  const pass  = document.getElementById('taktPass').value;
+  const err   = document.getElementById('taktLoginErr');
+  err.textContent = 'Logowanie…';
+  const { error } = await _auth.auth.signInWithPassword({ email: email, password: pass });
+  if (error) { err.textContent = 'Błąd logowania: ' + (error.message || error); return; }
+  err.textContent = '';
+  _taktShowApp();
+}
+async function taktStart(){
+  try { const { data } = await _auth.auth.getSession(); if (data && data.session) { _taktShowApp(); return; } } catch(e){}
+  document.getElementById('taktLogin').style.display = 'flex';
+}
+document.addEventListener('DOMContentLoaded', taktStart);
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Enter' && document.getElementById('taktLogin').style.display !== 'none') taktLogin();
+});
 </script>
 </head>
 <body>
-<button id="taktToggle" onclick="taktToggle()" title="Przełącz między widokiem mobilnym a pełnym"><span id="taktToggleLbl">przełącz widok</span></button>
+<div id="taktLogin" style="display:none;position:fixed;inset:0;z-index:99998;background:#141210;color:#fff;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+  <div style="background:#1d1a17;border:1px solid #3a342b;border-radius:16px;padding:32px;width:100%;max-width:360px;box-shadow:0 30px 60px -30px rgba(0,0,0,.7)">
+    <div style="font-weight:900;letter-spacing:.16em;font-size:1.5rem">T<span style="color:#D62B1F">A</span>KT</div>
+    <div style="color:#c9c4b9;font-size:.85rem;margin:4px 0 20px">Panel trenera — zaloguj się</div>
+    <input id="taktEmail" type="email" placeholder="e-mail" autocomplete="username" style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:10px;border-radius:9px;border:1px solid #3a342b;background:#141210;color:#fff">
+    <input id="taktPass" type="password" placeholder="hasło" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:14px;border-radius:9px;border:1px solid #3a342b;background:#141210;color:#fff">
+    <button onclick="taktLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:#D62B1F;color:#fff;font-weight:800;cursor:pointer">Zaloguj</button>
+    <div id="taktLoginErr" style="color:#ff8a80;font-size:.82rem;margin-top:10px;min-height:1em"></div>
+  </div>
+</div>
+<button id="taktToggle" onclick="taktToggle()" title="Przełącz między widokiem mobilnym a pełnym" style="display:none;position:fixed;right:14px;bottom:14px;z-index:99999;background:#D62B1F;color:#fff;border:none;border-radius:22px;padding:10px 16px;font:600 .85rem system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 18px -6px rgba(0,0,0,.5);opacity:.92"><span id="taktToggleLbl">przełącz widok</span></button>
+<button id="taktLogoutBtn" onclick="taktLogout()" style="display:none;position:fixed;right:14px;bottom:54px;z-index:99999;background:#1a1a1a;color:#fff;border:1px solid #444;border-radius:22px;padding:8px 14px;font:600 .8rem system-ui;cursor:pointer">Wyloguj</button>
 <div id="appHost"></div>
 
 <template id="app-desktop">
@@ -1105,6 +1169,8 @@ function applyBranding(){
   }catch(e){}
 }
 applyBranding();
+// Zalogowany przez Supabase Auth (takt-panel) → obejdź stare bramki PIN-u trenera
+if (window.TAKT_AUTHED) { if (!db.cloud) db.cloud = {}; db.cloud.trainerPin = 'auth'; }
 initAutoBackup().then(() => autoLoadStateOnStart());  // najpierw plik backupu, potem stan z chmury
 
 // ===================== TABS =====================
@@ -1448,6 +1514,7 @@ const CLOUD_ANON = TAKT_CONFIG.supabaseAnonKey;
 
 let _sbClient = null;
 function getSb() {
+  if (window.TAKT_SB) return window.TAKT_SB;  // zalogowany klient z bootstrapu (takt-panel)
   if (typeof supabase === 'undefined') return null;  // brak internetu / biblioteka się nie wczytała
   if (!_sbClient) _sbClient = supabase.createClient(CLOUD_URL, CLOUD_ANON);
   return _sbClient;
@@ -4250,7 +4317,7 @@ document.querySelectorAll('.modal-backdrop').forEach(b => {
 <script>
 const SUPABASE_URL  = TAKT_CONFIG.supabaseUrl;
 const SUPABASE_ANON = TAKT_CONFIG.supabaseAnonKey;
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = window.TAKT_SB || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 let pin = '', week = 0, lessons = [], currentId = null, curPeople = 2, curStyle = 'LA', addDate = null;
 let lessonPrice = 120;   // cena lekcji indywidualnej (z chmury, get_lesson_price)
@@ -4293,6 +4360,7 @@ async function enterPin(){
   load();
 }
 function lock(){
+  if (window.TAKT_AUTHED && window.taktLogout) { window.taktLogout(); return; }  // wyloguj z Supabase Auth
   sessionStorage.removeItem('panel_pin'); pin='';
   document.getElementById('app').classList.add('hidden');
   document.getElementById('lockBtn').classList.add('hidden');
@@ -4461,9 +4529,18 @@ function applyBranding(){
 applyBranding();
 
 // ---- start ----
-const saved=sessionStorage.getItem('panel_pin');
-if(saved){ document.getElementById('pinInput').value=saved; enterPin(); }
-document.getElementById('pinInput').addEventListener('keydown',e=>{ if(e.key==='Enter') enterPin(); });
+if (window.TAKT_AUTHED) {
+  // logowanie obsłużone przez Supabase Auth (takt-panel) — pomiń ekran PIN
+  pin = 'auth';
+  document.getElementById('pinScreen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('lockBtn').classList.remove('hidden');
+  subscribe(); load();
+} else {
+  const saved=sessionStorage.getItem('panel_pin');
+  if(saved){ document.getElementById('pinInput').value=saved; enterPin(); }
+  document.getElementById('pinInput').addEventListener('keydown',e=>{ if(e.key==='Enter') enterPin(); });
+}
 </script>
 
 </template>
