@@ -460,6 +460,7 @@ document.addEventListener('keydown', function(e){
       <div class="card">
         <div class="section-title">🔴 Brak wpłaty</div>
         <div id="unpaidParticipants"></div>
+        <button class="btn btn-outline" style="margin-top:10px;width:100%" onclick="sendUnpaidReminders()">📱 Wyślij przypomnienia SMS zalegającym</button>
       </div>
     </div>
     <!-- DEBUG LOG -->
@@ -666,7 +667,7 @@ document.addEventListener('keydown', function(e){
 
     <div class="graf-toolbar">
       <button class="btn btn-outline btn-sm" onclick="openTrainersModal()">⚙ Trenerzy</button>
-      <button class="cloud-pill offline" id="cloudPill" onclick="openCloudModal()" title="Połączenie z chmurą zapisów — kliknij, by podać PIN trenera">
+      <button class="cloud-pill offline" id="cloudPill" onclick="openCloudModal()" title="Połączenie z chmurą — kliknij, by zobaczyć konto i synchronizację">
         <span class="cloud-dot"></span><span id="cloudPillText">Chmura: offline</span>
       </button>
       <button class="btn btn-outline btn-sm" onclick="publishWeek()" title="Wyślij grafik tego tygodnia do chmury (zapisy par)">☁ Publikuj tydzień</button>
@@ -709,7 +710,7 @@ document.addEventListener('keydown', function(e){
       <div class="graf-toolbar">
         <button class="btn btn-outline btn-sm" onclick="openCoachesModal()">⚙ Szkoleniowcy</button>
         <button class="btn btn-primary btn-sm" onclick="openTrainingModal()">+ Szkolenie</button>
-        <button class="cloud-pill offline" id="cloudPill2" onclick="openCloudModal()" title="Połączenie z chmurą zapisów — kliknij, by podać PIN trenera">
+        <button class="cloud-pill offline" id="cloudPill2" onclick="openCloudModal()" title="Połączenie z chmurą — kliknij, by zobaczyć konto i synchronizację">
           <span class="cloud-dot"></span><span id="cloudPill2Text">Chmura: offline</span>
         </button>
       </div>
@@ -763,6 +764,11 @@ document.addEventListener('keydown', function(e){
       <label>Grupa *</label>
       <input type="text" id="pGroup" placeholder="np. Salsa Podstawy, Bachata Śr" list="groupSuggestions">
       <datalist id="groupSuggestions"></datalist>
+    </div>
+    <div class="form-group">
+      <label>Telefon (SMS) <span style="font-weight:400;color:var(--text-muted)">(opcjonalnie)</span></label>
+      <input type="tel" id="pPhone" placeholder="np. 600100200" autocomplete="off">
+      <div class="hint">Do powiadomień SMS (przypomnienia o wpłatach, potwierdzenia). Numer trzymany lokalnie na komputerze szkoły.</div>
     </div>
     <div class="form-group">
       <label>Partner w parze <span style="font-weight:400;color:var(--text-muted)">(opcjonalnie)</span></label>
@@ -862,7 +868,7 @@ document.addEventListener('keydown', function(e){
     <div class="form-group">
       <label>Cena lekcji indywidualnej (zł) <span style="font-weight:400;color:var(--text-muted)">— jedna dla wszystkich trenerów</span></label>
       <input type="number" id="tLessonPrice" min="0" step="10" style="width:140px">
-      <div class="hint">Dotyczy lekcji Czw/Pt i dni dodatkowych (nie szkoleń weekendowych — te mają własne stawki). Zmiana wymaga połączenia z chmurą i PIN-u trenera; obowiązuje dla nowo publikowanych lekcji.</div>
+      <div class="hint">Dotyczy lekcji Czw/Pt i dni dodatkowych (nie szkoleń weekendowych — te mają własne stawki). Zmiana wymaga połączenia z chmurą (musisz być zalogowany); obowiązuje dla nowo publikowanych lekcji.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('trainersModal')">Anuluj</button>
@@ -874,12 +880,12 @@ document.addEventListener('keydown', function(e){
 <!-- MODAL: Chmura (Supabase) -->
 <div class="modal-backdrop" id="cloudModal">
   <div class="modal" style="max-width:420px">
-    <h3>☁ Połączenie z chmurą</h3>
-    <p style="color:var(--text-muted);font-size:.88rem;margin-top:0">Połączenie ze szkolną chmurą zapisów jest już skonfigurowane. Wystarczy podać PIN trenera.</p>
+    <h3>☁ Chmura i konto</h3>
+    <p style="color:var(--text-muted);font-size:.88rem;margin-top:0">Jesteś zalogowany — panel łączy się z chmurą automatycznie.</p>
     <div class="form-group">
-      <label>PIN trenera</label>
-      <input type="password" id="cTrainerPin" placeholder="PIN do publikacji grafiku" autocomplete="off">
-      <div class="hint">PIN do publikowania grafiku i pobierania zapisów par.</div>
+      <label>Zalogowano jako</label>
+      <div id="cloudAccount" style="font-weight:600">—</div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="window.taktLogout && window.taktLogout()">Wyloguj</button>
     </div>
     <div class="form-group" id="syncSection">
       <label>Synchronizacja między urządzeniami</label>
@@ -899,8 +905,7 @@ document.addEventListener('keydown', function(e){
       <div class="hint" style="margin-top:6px">Cała baza (uczestnicy, wpłaty, grafik, szkolenia) wysyła się automatycznie po każdej zmianie, a przy starcie aplikacja wczytuje nowszą wersję z chmury. Przyciski są do ręcznego wymuszenia.</div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('cloudModal')">Anuluj</button>
-      <button class="btn btn-primary" onclick="saveCloud()">Zapisz</button>
+      <button class="btn btn-outline" onclick="closeModal('cloudModal')">Zamknij</button>
     </div>
   </div>
 </div>
@@ -1389,7 +1394,7 @@ async function deleteLesson(id) {
   // a „Pobierz zapisy" niczego nie usuwa.
   const sb = getSb();
   if (!sb || !db.cloud || !db.cloud.trainerPin) {
-    alert('Lekcję usunięto lokalnie, ale BEZ połączenia z chmurą (lub bez PIN-u) — dla par może być nadal widoczna.\nGdy będziesz online, kliknij „☁ Publikuj" przy tym tygodniu.');
+    alert('Lekcję usunięto lokalnie, ale BEZ połączenia z chmurą — dla par może być nadal widoczna.\nGdy będziesz online, kliknij „☁ Publikuj" przy tym tygodniu.');
     return;
   }
   const { error } = await sb.rpc('trainer_delete_slot', { p_pin: db.cloud.trainerPin, p_id: id });
@@ -1459,7 +1464,7 @@ async function unbookLesson(id) {
   // więc bez tego para dalej widniałaby jako „Zajęte" na stronie zapisów.
   const sb = getSb();
   if (!sb || !db.cloud || !db.cloud.trainerPin) {
-    alert('Parę wypisano lokalnie, ale BEZ połączenia z chmurą (lub bez PIN-u) — termin na stronie par nadal wygląda na zajęty.\nGdy będziesz online, wypisz parę ponownie po „⟳ Pobierz zapisy".');
+    alert('Parę wypisano lokalnie, ale BEZ połączenia z chmurą — termin na stronie par nadal wygląda na zajęty.\nGdy będziesz online, wypisz parę ponownie po „⟳ Pobierz zapisy".');
     return;
   }
   const { error } = await sb.rpc('trainer_set_pair', { p_pin: db.cloud.trainerPin, p_id: id, p_pair: '', p_people: 2 });
@@ -1501,7 +1506,7 @@ async function saveTrainers() {
       if (error) { alert('Trenerzy zapisani, ale nie udało się zmienić ceny: ' + (error.message || error)); }
       else { db.lessonPrice = newPrice; saveDb(); }
     } else {
-      alert('Trenerzy zapisani. Zmiana ceny wymaga połączenia z chmurą i PIN-u trenera (kliknij status chmury).');
+      alert('Trenerzy zapisani. Zmiana ceny wymaga połączenia z chmurą (musisz być zalogowany).');
     }
   }
   renderGrafik();
@@ -1542,24 +1547,21 @@ async function checkCloud() {
 }
 
 function openCloudModal() {
-  document.getElementById('cTrainerPin').value = (db.cloud && db.cloud.trainerPin) || '';
   updateSyncStatusUI();
   refreshEncPassUI();
+  const el = document.getElementById('cloudAccount');
+  if (el && window.TAKT_SB) {
+    window.TAKT_SB.auth.getUser()
+      .then(r => { el.textContent = (r.data && r.data.user && r.data.user.email) || 'trener'; })
+      .catch(() => {});
+  }
   openModal('cloudModal');
-}
-function saveCloud() {
-  if (!db.cloud) db.cloud = {};
-  db.cloud.trainerPin = document.getElementById('cTrainerPin').value.trim();
-  saveDb();
-  closeModal('cloudModal');
-  checkCloud();
-  loadStateFromCloud(false);  // nowe urządzenie: od razu ściągnij stan z chmury
 }
 
 async function publishWeek() {
   const sb = getSb();
   if (!sb) { alert('Brak połączenia z internetem.'); updateCloudStatusUI('offline'); return; }
-  if (!db.cloud || !db.cloud.trainerPin) { alert('Najpierw podaj PIN trenera (kliknij status chmury).'); openCloudModal(); return; }
+  if (!db.cloud || !db.cloud.trainerPin) { alert('Nie jesteś zalogowany — zaloguj się ponownie.'); return; }
   const monday = mondayOf(grafikWeek);
   // WSZYSTKIE lekcje indywidualne tygodnia (też nietypowe dni) — publish_slots kasuje
   // z chmury cały tydzień kind='weekly' spoza listy, więc lista musi być kompletna.
@@ -2077,7 +2079,7 @@ async function deleteTraining(id) {
   const sb = getSb();
   if (!n) return; // nic nie było do usunięcia
   if (!sb || !db.cloud || !db.cloud.trainerPin) {
-    alert('Szkolenie usunięto lokalnie, ale BEZ połączenia z chmurą (lub bez PIN-u) — lekcje mogą jeszcze być widoczne dla par.\nGdy będziesz online, wejdź w dowolne szkolenie z tego weekendu i kliknij „☁ Publikuj", albo daj znać.');
+    alert('Szkolenie usunięto lokalnie, ale BEZ połączenia z chmurą — lekcje mogą jeszcze być widoczne dla par.\nGdy będziesz online, wejdź w dowolne szkolenie z tego weekendu i kliknij „☁ Publikuj", albo daj znać.');
     return;
   }
   const remaining = db.lessons.filter(l => l.kind === 'weekend' && pDates.includes(l.date)).map(trainingSlot);
@@ -2138,7 +2140,7 @@ async function publishTraining() {
   if (!t) return;
   const sb = getSb();
   if (!sb) { alert('Brak połączenia z internetem.'); updateCloudStatusUI('offline'); return; }
-  if (!db.cloud || !db.cloud.trainerPin) { alert('Najpierw podaj PIN trenera (kliknij status chmury).'); openCloudModal(); return; }
+  if (!db.cloud || !db.cloud.trainerPin) { alert('Nie jesteś zalogowany — zaloguj się ponownie.'); return; }
   const slots = db.lessons.filter(l => l.trainingId === t.id).map(l => ({
     id: l.id, date: l.date, weekday: l.day, trainer: l.trainer, style: l.style, start_time: l.start, price: l.price, kind: 'weekend'
   }));
@@ -2155,7 +2157,7 @@ async function pullTrainingBookings() {
   if (!t) return;
   const sb = getSb();
   if (!sb) { alert('Brak połączenia z internetem.'); updateCloudStatusUI('offline'); return; }
-  if (!db.cloud || !db.cloud.trainerPin) { alert('Najpierw podaj PIN trenera (kliknij status chmury).'); openCloudModal(); return; }
+  if (!db.cloud || !db.cloud.trainerPin) { alert('Nie jesteś zalogowany — zaloguj się ponownie.'); return; }
   const from = t.dateSat || t.dateSun, to = t.dateSun || t.dateSat;
   const { data, error } = await sb.rpc('trainer_slots', { p_pin: db.cloud.trainerPin, p_from: from, p_to: to });
   if (error) { updateCloudStatusUI('offline'); alert('Błąd pobierania: ' + (error.message || error)); return; }
@@ -2259,10 +2261,12 @@ function openParticipantModal(id) {
     document.getElementById('pFirstName').value = currentP.firstName;
     document.getElementById('pLastName').value = currentP.lastName;
     document.getElementById('pGroup').value = currentP.group;
+    document.getElementById('pPhone').value = currentP.phone || '';
   } else {
     document.getElementById('pFirstName').value = '';
     document.getElementById('pLastName').value = '';
     document.getElementById('pGroup').value = '';
+    document.getElementById('pPhone').value = '';
   }
   // Populate partner dropdown
   const others = db.participants.filter(p => p.id !== id);
@@ -2306,6 +2310,7 @@ function saveParticipant() {
   const firstName = document.getElementById('pFirstName').value.trim();
   const lastName = document.getElementById('pLastName').value.trim();
   const group = document.getElementById('pGroup').value.trim();
+  const phone = document.getElementById('pPhone').value.trim();
   const newPartnerId = document.getElementById('pPartner').value;
   const newGuardianId = document.getElementById('pGuardian').value;
   if ((!firstName && !lastName) || !group) { alert('Uzupełnij co najmniej imię lub nazwisko oraz grupę!'); return; }
@@ -2317,9 +2322,9 @@ function saveParticipant() {
     if (participant.pairId) {
       db.participants.forEach(p => { if (p.pairId === participant.pairId) delete p.pairId; });
     }
-    participant.firstName = firstName; participant.lastName = lastName; participant.group = group;
+    participant.firstName = firstName; participant.lastName = lastName; participant.group = group; participant.phone = phone;
   } else {
-    participant = { id: uid(), firstName, lastName, group };
+    participant = { id: uid(), firstName, lastName, group, phone };
     db.participants.push(participant);
   }
 
@@ -2432,6 +2437,40 @@ function confirmDelete() {
 
 // ===================== PAYMENTS =====================
 function monthKey() { return `${currentYear}-${String(currentMonth+1).padStart(2,'0')}`; }
+
+// ---- POWIADOMIENIA SMS (przypomnienia o wpłatach) ----
+const PL_MONTHS = ['styczeń','luty','marzec','kwiecień','maj','czerwiec','lipiec','sierpień','wrzesień','październik','listopad','grudzień'];
+// bez polskich znaków = 1 SMS (GSM-7, 160 znaków) zamiast pół (UCS-2, 70)
+function deaccent(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L'); }
+function normalizePhone(p) { let d = String(p || '').replace(/\D/g, ''); if (d.length === 9) d = '48' + d; return d; }
+
+async function sendUnpaidReminders() {
+  const key = monthKey();
+  const paidIds = new Set((db.payments[key] || []).map(e => e.participantId));
+  const unpaid = db.participants.filter(p => !paidIds.has(p.id));
+  if (!unpaid.length) { alert('Wszyscy mają opłacone w tym miesiącu — nie ma komu wysyłać.'); return; }
+  const withPhone = unpaid.filter(p => (p.phone || '').trim());
+  if (!withPhone.length) { alert('Zalegający nie mają numerów telefonu. Dodaj numery w kartach uczestników (przycisk edycji).'); return; }
+  const school = (typeof TAKT_CONFIG !== 'undefined' && TAKT_CONFIG.schoolName) ? TAKT_CONFIG.schoolName : 'Szkoła tańca';
+  const monthLabel = PL_MONTHS[currentMonth] + ' ' + currentYear;
+  const items = withPhone.map(p => ({
+    to: normalizePhone(p.phone),
+    text: deaccent(`Przypomnienie: brak wplaty za ${p.group} (${monthLabel}). Prosimy o uregulowanie. ${school}`)
+  }));
+  const skipped = unpaid.length - withPhone.length;
+  const cost = (items.length * 0.12).toFixed(2);
+  if (!confirm(`Wysłać ${items.length} SMS z przypomnieniem${skipped ? ` (${skipped} bez numeru — pominięci)` : ''}?\n\nSzacowany koszt: ~${cost} zł.`)) return;
+  const sb = getSb();
+  if (!sb) { alert('Brak połączenia z internetem.'); return; }
+  try {
+    const { data, error } = await sb.functions.invoke('send-sms', { body: { items } });
+    if (error) throw error;
+    const ok = (data && data.results) ? data.results.filter(r => r.ok).length : 0;
+    alert(`Wysłano SMS: ${ok}/${items.length}.` + (ok < items.length ? '\nCzęść mogła się nie udać — sprawdź numery lub stan konta SMSAPI.' : ''));
+  } catch (e) {
+    alert('Nie udało się wysłać SMS: ' + (e.message || e) + '\n\n(Sprawdź, czy funkcja „send-sms" jest wdrożona w Supabase i ustawiony token SMSAPI.)');
+  }
+}
 
 function updateMonthLabel() {
   const text = MONTHS_PL[currentMonth] + ' ' + currentYear;
