@@ -152,7 +152,7 @@ document.addEventListener('keydown', function(e){
   header { background: #1a1a1a; color: #fff; padding: 12px 28px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 12px rgba(0,0,0,.4); border-bottom: 3px solid var(--gold); }
   header h1 { font-size: 1.3rem; font-weight: 700; }
   header span { font-size: .85rem; opacity: .8; }
-  nav { display: flex; background: #f4f4f5; border-bottom: 2px solid #e5e5e5; padding: 0 28px; }
+  nav { display: flex; background: #f4f4f5; border-bottom: 2px solid #e5e5e5; padding: 0 28px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   nav button { background: none; border: none; padding: 14px 20px; font-size: .95rem; cursor: pointer; color: var(--text-muted); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .2s; font-weight: 500; }
   nav button.active { color: #1a1a1a; border-bottom-color: var(--gold); font-weight: 700; }
   nav button:hover:not(.active) { color: var(--text); }
@@ -204,6 +204,22 @@ document.addEventListener('keydown', function(e){
   @media(max-width:640px) { .two-col { grid-template-columns: 1fr; } nav button { padding: 12px 12px; font-size: .82rem; } }
   .uz-grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
   @media(max-width:900px) { .uz-grid { grid-template-columns: 1fr; } }
+  /* --- Widok na telefonie: nic nie rozpycha strony w poziomie --- */
+  @media(max-width:760px) {
+    html, body { max-width: 100%; overflow-x: hidden; }
+    main { padding: 14px 10px; }
+    .card { padding: 14px; }
+    nav { padding: 0 8px; }
+    nav button { padding: 12px 10px; font-size: .82rem; white-space: nowrap; }
+    /* szerokie tabele przewijają się WEWNĄTRZ, zamiast rozpychać ekran */
+    #participantTableWrap, #platnosciList, #savedMonthList, #statsTableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { font-size: .82rem; white-space: nowrap; }
+    /* pola i rzędy filtrów zawijają się i mogą się zwężać */
+    input[type="text"], input[type="search"] { min-width: 0; }
+    .search-row { flex-wrap: wrap; }
+    .search-row input[type="search"] { min-width: 0; flex: 1 1 100%; }
+    .row { flex-wrap: wrap; }
+  }
   .grp-row { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--border); }
   .grp-row .nm { flex: 1; font-weight: 600; font-size: .92rem; }
   .grp-row .cnt { font-size: .74rem; color: var(--text-muted); }
