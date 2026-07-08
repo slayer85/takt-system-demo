@@ -202,6 +202,12 @@ document.addEventListener('keydown', function(e){
   .stat-card .lbl { font-size: .8rem; color: var(--text-muted); margin-top: 4px; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media(max-width:640px) { .two-col { grid-template-columns: 1fr; } nav button { padding: 12px 12px; font-size: .82rem; } }
+  .uz-grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+  @media(max-width:900px) { .uz-grid { grid-template-columns: 1fr; } }
+  .grp-row { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .grp-row .nm { flex: 1; font-weight: 600; font-size: .92rem; }
+  .grp-row .cnt { font-size: .74rem; color: var(--text-muted); }
+  .grp-row button { padding: 4px 7px; font-size: .78rem; }
   .pay-row { display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid #f0eafa; font-size:.9rem; }
   .pay-row:last-child { border-bottom:none; }
   .pay-row .pay-name { flex:1; font-weight:500; }
@@ -355,23 +361,35 @@ document.addEventListener('keydown', function(e){
 
 <!-- ===== TAB: UCZESTNICY ===== -->
 <div id="tab-uczestnicy" class="tab active">
-  <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <h2>Baza Uczestników</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-outline" onclick="openImportModal()">⬆ Importuj grupę</button>
-        <button class="btn btn-ghost" onclick="openLinkDuplicatesModal()">🔗 Wykryj duplikaty</button>
-        <button class="btn btn-primary" onclick="openParticipantModal()">+ Dodaj uczestnika</button>
+  <div class="uz-grid">
+    <!-- LEWA: Baza grup -->
+    <div class="card">
+      <h2 style="font-size:1.05rem;margin-bottom:10px">Grupy</h2>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input type="text" id="newGroupName" placeholder="Nowa grupa…" style="flex:1" onkeydown="if(event.key==='Enter')addGroup()">
+        <button class="btn btn-primary btn-sm" onclick="addGroup()">+ Dodaj</button>
       </div>
+      <button class="btn btn-outline" style="width:100%;margin-bottom:12px" onclick="openImportModal()">⬆ Importuj grupę</button>
+      <div id="groupsList"></div>
     </div>
-    <div class="search-row">
-      <input type="search" id="searchInput" placeholder="Szukaj imię lub nazwisko…" oninput="renderParticipants()">
-      <select id="groupFilter" onchange="renderParticipants()">
-        <option value="">Wszystkie grupy</option>
-      </select>
-      <span id="participantCount" class="badge badge-info"></span>
+    <!-- PRAWA: Baza uczestników -->
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>Baza Uczestników</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="openLinkDuplicatesModal()">🔗 Wykryj duplikaty</button>
+          <button class="btn btn-primary" onclick="openParticipantModal()">+ Dodaj uczestnika</button>
+        </div>
+      </div>
+      <div class="search-row">
+        <input type="search" id="searchInput" placeholder="Szukaj imię lub nazwisko…" oninput="renderParticipants()">
+        <select id="groupFilter" onchange="renderParticipants()">
+          <option value="">Wszystkie grupy</option>
+        </select>
+        <span id="participantCount" class="badge badge-info"></span>
+      </div>
+      <div id="participantTableWrap"></div>
     </div>
-    <div id="participantTableWrap"></div>
   </div>
 </div>
 
@@ -1135,6 +1153,9 @@ function loadDb() {
   if (!db.lessons) db.lessons = [];
   if (!db.nicknames) db.nicknames = {};  // własne zdrobnienia szkoły (dim→forma oficjalna, znormalizowane)
   rebuildNicks();
+  // Baza grup (edytowalna) — migracja/synchronizacja z grupami uczestników
+  if (!Array.isArray(db.groups)) db.groups = [];
+  db.groups = [...new Set([...db.groups, ...db.participants.map(p => p.group).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'pl'));
   if (!db.coaches) db.coaches = [];      // szkoleniowcy gościnni {id,name,price}
   if (!db.trainings) db.trainings = [];  // szkolenia weekendowe {id,name,dateSat,dateSun,coachIds[],days[]}
   db.trainings.forEach(t => { if (!t.days || !t.days.length) t.days = ['sobota', 'niedziela']; });
@@ -2181,13 +2202,66 @@ async function pullTrainingBookings() {
 
 // ===================== PARTICIPANTS =====================
 function getGroups() {
-  return [...new Set(db.participants.map(p => p.group))].filter(Boolean).sort();
+  // baza grup (db.groups) + ewentualne grupy uczestników spoza listy (bezpieczeństwo)
+  return [...new Set([...(db.groups || []), ...db.participants.map(p => p.group).filter(Boolean)])]
+    .sort((a, b) => a.localeCompare(b, 'pl'));
+}
+
+// ---- BAZA GRUP (edycja przez szkołę) ----
+function addGroup() {
+  const inp = document.getElementById('newGroupName');
+  const name = (inp.value || '').trim();
+  if (!name) return;
+  if (db.groups.some(g => g.toLowerCase() === name.toLowerCase())) { alert('Taka grupa już istnieje.'); return; }
+  db.groups.push(name);
+  db.groups.sort((a, b) => a.localeCompare(b, 'pl'));
+  inp.value = '';
+  saveDb();
+  renderParticipants();  // odświeża też listę grup + filtry
+}
+function renameGroup(oldName) {
+  const nn = (prompt('Nowa nazwa grupy „' + oldName + '":', oldName) || '').trim();
+  if (!nn || nn === oldName) return;
+  if (db.groups.some(g => g.toLowerCase() === nn.toLowerCase() && g.toLowerCase() !== oldName.toLowerCase())) { alert('Grupa o tej nazwie już istnieje.'); return; }
+  db.groups = db.groups.map(g => g === oldName ? nn : g);
+  // uczestnicy podążają za nazwą
+  db.participants.forEach(p => { if (p.group === oldName) p.group = nn; });
+  saveDb();
+  renderParticipants();
+}
+function deleteGroup(name) {
+  const affected = db.participants.filter(p => p.group === name).length;
+  const msg = affected
+    ? `Usunąć grupę „${name}"?\n${affected} uczestnik(ów) zostanie BEZ przypisanej grupy (nie zostaną skasowani).`
+    : `Usunąć pustą grupę „${name}"?`;
+  if (!confirm(msg)) return;
+  db.groups = db.groups.filter(g => g !== name);
+  db.participants.forEach(p => { if (p.group === name) p.group = ''; });
+  saveDb();
+  renderParticipants();
+}
+function renderGroups() {
+  const box = document.getElementById('groupsList');
+  if (!box) return;
+  const noGroup = db.participants.filter(p => !(p.group || '').trim()).length;
+  const rows = (db.groups || []).map(g => {
+    const n = db.participants.filter(p => p.group === g).length;
+    return `<div class="grp-row">
+      <span class="nm">${esc(g)}</span>
+      <span class="cnt">${n} os.</span>
+      <button class="btn btn-ghost btn-sm" title="Zmień nazwę" onclick="renameGroup('${esc(g).replace(/'/g, "\\'")}')">✏️</button>
+      <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626" title="Usuń grupę" onclick="deleteGroup('${esc(g).replace(/'/g, "\\'")}')">🗑</button>
+    </div>`;
+  }).join('');
+  box.innerHTML = (rows || '<div class="hint">Brak grup — dodaj pierwszą.</div>')
+    + (noGroup ? `<div class="grp-row" style="opacity:.8"><span class="nm" style="font-style:italic;color:var(--text-muted)">bez grupy</span><span class="cnt">${noGroup} os.</span></div>` : '');
 }
 
 function renderParticipants() {
   const search = (document.getElementById('searchInput').value || '').toLowerCase();
   const groupF = document.getElementById('groupFilter').value;
   const groups = getGroups();
+  renderGroups();  // lewa tabela „Grupy" w tej samej zakładce
 
   // Update group filter options
   const gf = document.getElementById('groupFilter');
@@ -2327,6 +2401,8 @@ function saveParticipant() {
     participant = { id: uid(), firstName, lastName, group, phone };
     db.participants.push(participant);
   }
+  // nowa grupa wpisana w karcie → dopisz do bazy grup
+  if (group && !db.groups.includes(group)) { db.groups.push(group); db.groups.sort((a, b) => a.localeCompare(b, 'pl')); }
 
   // Assign dance partner (pair) — for adult couples
   if (newPartnerId) {
@@ -2465,8 +2541,16 @@ async function sendUnpaidReminders() {
   try {
     const { data, error } = await sb.functions.invoke('send-sms', { body: { items } });
     if (error) throw error;
-    const ok = (data && data.results) ? data.results.filter(r => r.ok).length : 0;
-    alert(`Wysłano SMS: ${ok}/${items.length}.` + (ok < items.length ? '\nCzęść mogła się nie udać — sprawdź numery lub stan konta SMSAPI.' : ''));
+    const results = (data && data.results) || [];
+    const ok = results.filter(r => r.ok).length;
+    if (ok < items.length) {
+      const fail = results.find(r => !r.ok);
+      const rp = fail && fail.resp;
+      const detail = rp ? (rp.message || rp.error || (typeof rp === 'string' ? rp : JSON.stringify(rp))) : 'brak szczegółów';
+      alert(`Wysłano SMS: ${ok}/${items.length}.\n\nSMSAPI zwróciło: ${detail}\n\nNajczęstsze przyczyny: brak środków na koncie, niezatwierdzona/niewybrana nazwa nadawcy (SMSAPI_SENDER), albo konto niezweryfikowane.`);
+    } else {
+      alert(`Wysłano SMS: ${ok}/${items.length}. ✅`);
+    }
   } catch (e) {
     alert('Nie udało się wysłać SMS: ' + (e.message || e) + '\n\n(Sprawdź, czy funkcja „send-sms" jest wdrożona w Supabase i ustawiony token SMSAPI.)');
   }
@@ -3987,6 +4071,7 @@ function confirmImport() {
   toAdd.forEach(p => {
     db.participants.push({ id: uid(), firstName: p.firstName, lastName: p.lastName, group });
   });
+  if (group && !db.groups.includes(group)) { db.groups.push(group); db.groups.sort((a, b) => a.localeCompare(b, 'pl')); }
   saveDb();
   closeModal('importModal');
   renderParticipants();
