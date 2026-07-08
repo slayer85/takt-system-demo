@@ -879,9 +879,14 @@ document.addEventListener('keydown', function(e){
     </div>
     <div class="form-group">
       <label id="bPairLabel">Nazwa pary *</label>
-      <input type="text" id="bPair" placeholder="np. Jan Kowalski & Anna Nowak" list="pairSuggestions">
+      <input type="text" id="bPair" placeholder="np. Jan Kowalski & Anna Nowak" list="pairSuggestions" oninput="bookPairInput()">
       <datalist id="pairSuggestions"></datalist>
       <div class="hint">Wpisz nazwę pary / imię i nazwisko solistki / solisty (lub wybierz z listy).</div>
+    </div>
+    <div class="form-group">
+      <label>Telefon do potwierdzenia SMS <span style="font-weight:400;color:var(--text-muted)">(opcjonalnie)</span></label>
+      <input type="tel" id="bPhone" placeholder="np. 600100200" autocomplete="off">
+      <div class="hint">Jeśli wpiszesz numer, wyślemy SMS z potwierdzeniem rezerwacji. Podpowie się z karty uczestnika po wpisaniu nazwiska.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('bookModal')">Anuluj</button>
@@ -1449,6 +1454,7 @@ function openBookModal(id) {
   if (!l) return;
   document.getElementById('bLessonId').value = id;
   document.getElementById('bPair').value = '';
+  document.getElementById('bPhone').value = '';
   document.getElementById('bPeople').value = '2';
   updateBookPrice();   // ustawia etykietę + podpowiedzi (pary/soliści) wg wyboru
   const dayName = DAY_LABEL[l.day] || l.day;
@@ -1458,9 +1464,20 @@ function openBookModal(id) {
   openModal('bookModal');
 }
 
+// Podpowiedz numer z karty uczestnika, gdy trener wpisuje nazwę (nie nadpisuje ręcznego)
+function bookPairInput() {
+  const phoneEl = document.getElementById('bPhone');
+  if (phoneEl.value.trim()) return;
+  const val = normalize(document.getElementById('bPair').value);
+  if (!val) return;
+  const m = db.participants.find(p => (p.phone || '').trim() && p.lastName && val.includes(normalize(p.lastName)));
+  if (m) phoneEl.value = m.phone;
+}
+
 async function confirmBook() {
   const id = document.getElementById('bLessonId').value;
   const pair = document.getElementById('bPair').value.trim();
+  const phone = document.getElementById('bPhone').value.trim();
   const people = +document.getElementById('bPeople').value === 1 ? 1 : 2;
   if (!pair) { alert('Wpisz nazwę pary lub imię solisty.'); return; }
   const l = db.lessons.find(x => x.id === id);
@@ -1476,6 +1493,26 @@ async function confirmBook() {
   if (sb && db.cloud && db.cloud.trainerPin) {
     const { error } = await sb.rpc('trainer_set_pair', { p_pin: db.cloud.trainerPin, p_id: id, p_pair: pair, p_people: people });
     if (error) alert('Zapisano lokalnie, ale nie udało się oznaczyć terminu jako zajęty w chmurze: ' + (error.message || error));
+  }
+  // Potwierdzenie SMS (opcjonalne — gdy podano numer)
+  if (phone && sb) {
+    const dayName = DAY_LABEL[l.day] || l.day;
+    const school = (typeof TAKT_CONFIG !== 'undefined' && TAKT_CONFIG.schoolName) ? TAKT_CONFIG.schoolName : 'Szkoła tańca';
+    const text = deaccent(`Potwierdzenie rezerwacji: ${pair} — lekcja ${l.style} ${dayName} ${fmtDMfromStr(l.date)} ${l.start} u ${l.trainer}. ${school}`);
+    try {
+      const { data, error } = await sb.functions.invoke('send-sms', { body: { items: [{ to: normalizePhone(phone), text }] } });
+      if (error) throw error;
+      const r0 = data && data.results && data.results[0];
+      if (!r0 || !r0.ok) {
+        const rp = r0 && r0.resp;
+        const detail = rp ? (rp.message || rp.error || (typeof rp === 'string' ? rp : JSON.stringify(rp))) : 'brak szczegółów';
+        alert('Zapisano, ale SMS potwierdzający się nie udał: ' + detail);
+      } else {
+        alert('Zapisano ✅ i wysłano SMS z potwierdzeniem.');
+      }
+    } catch (e) {
+      alert('Zapisano, ale SMS potwierdzający się nie udał: ' + (e.message || e));
+    }
   }
 }
 
@@ -4420,6 +4457,8 @@ document.querySelectorAll('.modal-backdrop').forEach(b => {
     </div>
     <label id="nameLabel">Nazwa pary</label>
     <input id="pairName" placeholder="np. Kowalscy" autocomplete="off">
+    <label style="margin-top:10px">Telefon do potwierdzenia SMS (opcjonalnie)</label>
+    <input id="bookPhone" type="tel" placeholder="np. 600100200" autocomplete="off">
     <div class="foot">
       <button class="btn" onclick="closeModal('bookModal')">Anuluj</button>
       <button class="btn btn-primary" onclick="confirmBook()">Zapisz</button>
@@ -4475,6 +4514,8 @@ function addMinutes(hhmm,mins){ const [h,m]=hhmm.split(':').map(Number); const t
   return String(Math.floor(t/60)%24).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function deaccent(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ł/g,'l').replace(/Ł/g,'L'); }
+function normalizePhone(p){ let d=String(p||'').replace(/\D/g,''); if(d.length===9) d='48'+d; return d; }
 
 // ---- toast / modale ----
 let toastT=null;
@@ -4578,16 +4619,31 @@ function openBook(id){
   const l=lessons.find(x=>x.id===id); if(!l) return;
   currentId=id; setPeople(2);
   document.getElementById('pairName').value='';
+  document.getElementById('bookPhone').value='';
   document.getElementById('bookInfo').textContent =
     dayName(l.date)+' '+fmtDM(l.date)+', '+l.start_time+' – '+addMinutes(l.start_time,45)+' · '+l.style+' · '+l.trainer;
   openModal('bookModal');
 }
 async function confirmBook(){
   const name=document.getElementById('pairName').value.trim();
+  const phone=document.getElementById('bookPhone').value.trim();
   if(!name){ toast('Wpisz nazwę pary lub imię solisty.', true); return; }
+  const l=lessons.find(x=>x.id===currentId);
   const { error } = await sb.rpc('trainer_set_pair', { p_pin: pin, p_id: currentId, p_pair: name, p_people: curPeople });
   if(error){ toast('Nie udało się zapisać: '+(error.message||error), true); return; }
   closeModal('bookModal'); toast('Zapisano: '+name); load();
+  if(phone){
+    const school=(typeof TAKT_CONFIG!=='undefined' && TAKT_CONFIG.schoolName)?TAKT_CONFIG.schoolName:'Szkoła tańca';
+    const text = l ? deaccent(`Potwierdzenie rezerwacji: ${name} — lekcja ${l.style} ${dayName(l.date)} ${fmtDM(l.date)} ${l.start_time} u ${l.trainer}. ${school}`)
+                   : deaccent(`Potwierdzenie rezerwacji: ${name}. ${school}`);
+    try{
+      const { data, error:e2 } = await sb.functions.invoke('send-sms', { body: { items: [{ to: normalizePhone(phone), text }] } });
+      if(e2) throw e2;
+      const r0 = data && data.results && data.results[0];
+      if(!r0 || !r0.ok){ const rp=r0&&r0.resp; toast('Zapisano, ale SMS się nie udał'+(rp?': '+(rp.message||rp.error||''):''), true); }
+      else toast('SMS z potwierdzeniem wysłany ✅');
+    }catch(err){ toast('Zapisano, ale SMS się nie udał: '+(err.message||err), true); }
+  }
 }
 async function unbook(id){
   const l=lessons.find(x=>x.id===id); if(!l) return;
