@@ -1013,6 +1013,29 @@ document.addEventListener('keydown', function(e){
   </div>
 </div>
 
+<!-- MODAL: SMS do pary (potwierdzenie / zmiana / odwołanie) -->
+<div class="modal-backdrop" id="lessonSmsModal">
+  <div class="modal" style="max-width:440px">
+    <h3>📱 SMS do pary</h3>
+    <input type="hidden" id="smsLessonId">
+    <div id="smsLessonInfo" style="background:#f4f4f5;border-radius:8px;padding:10px 12px;font-size:.85rem;margin-bottom:14px"></div>
+    <div class="form-group">
+      <label>Telefon *</label>
+      <input type="tel" id="smsPhone" placeholder="np. 600100200" autocomplete="off">
+      <div class="hint">Podpowie się z karty uczestnika, jeśli nazwisko pary pasuje.</div>
+    </div>
+    <div class="form-group">
+      <label>Treść</label>
+      <textarea id="smsText" style="min-height:90px;font-size:.88rem"></textarea>
+      <div class="hint">Domyślnie potwierdzenie — możesz zmienić na informację o zmianie godziny lub odwołaniu.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('lessonSmsModal')">Anuluj</button>
+      <button class="btn btn-primary" onclick="sendLessonSms()">Wyślij SMS</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Chmura (Supabase) -->
 <div class="modal-backdrop" id="cloudModal">
   <div class="modal" style="max-width:420px">
@@ -1466,7 +1489,7 @@ function lessonSlotHtml(l) {
     : `<button class="pay-pill" title="Kliknij, gdy zapłacono" onclick="togglePaid('${l.id}')">Do zapłaty ${price} zł</button>`;
   const bookHtml = booked
     ? `<div class="graf-paired">
-         <div class="gp-row">${icon} ${esc(l.pair)} <button title="Wypisz" onclick="unbookLesson('${l.id}')">✕</button></div>
+         <div class="gp-row">${icon} ${esc(l.pair)} <span style="display:flex;gap:4px"><button title="Wyślij SMS do pary" onclick="openLessonSms('${l.id}')">📱</button><button title="Wypisz" onclick="unbookLesson('${l.id}')">✕</button></span></div>
          ${payHtml}
        </div>`
     : `<button class="graf-bookbtn" onclick="openBookModal('${l.id}')">✍ Zapisz parę / solistkę / solistę</button>`;
@@ -1610,6 +1633,47 @@ async function confirmBook() {
     } catch (e) {
       alert('Zapisano, ale SMS potwierdzający się nie udał: ' + (e.message || e));
     }
+  }
+}
+
+// SMS do pary przy JUŻ zajętej lekcji (np. potwierdzenie zapisu online / zmiana / odwołanie)
+function openLessonSms(id) {
+  const l = db.lessons.find(x => x.id === id);
+  if (!l) return;
+  document.getElementById('smsLessonId').value = id;
+  const dayName = DAY_LABEL[l.day] || l.day;
+  document.getElementById('smsLessonInfo').innerHTML =
+    `<strong>${esc(l.pair || '')}</strong> · ${dayName} ${fmtDMfromStr(l.date)} ${l.start}–${addMinutes(l.start, 45)} · ${l.style} · ${esc(l.trainer)}`;
+  let phone = '';
+  const val = normalize(l.pair || '');
+  const m = db.participants.find(p => (p.phone || '').trim() && p.lastName && val.includes(normalize(p.lastName)));
+  if (m) phone = m.phone;
+  document.getElementById('smsPhone').value = phone;
+  const school = (typeof TAKT_CONFIG !== 'undefined' && TAKT_CONFIG.schoolName) ? TAKT_CONFIG.schoolName : 'Szkoła tańca';
+  document.getElementById('smsText').value = deaccent(`Potwierdzenie rezerwacji: ${l.pair} — lekcja ${l.style} ${dayName} ${fmtDMfromStr(l.date)} ${l.start} u ${l.trainer}. ${school}`);
+  openModal('lessonSmsModal');
+}
+async function sendLessonSms() {
+  const phone = document.getElementById('smsPhone').value.trim();
+  const text = document.getElementById('smsText').value.trim();
+  if (!phone) { alert('Podaj numer telefonu.'); return; }
+  if (!text) { alert('Wpisz treść SMS.'); return; }
+  const sb = getSb();
+  if (!sb) { alert('Brak połączenia z internetem.'); return; }
+  try {
+    const { data, error } = await sb.functions.invoke('send-sms', { body: { items: [{ to: normalizePhone(phone), text: deaccent(text) }] } });
+    if (error) throw error;
+    const r0 = data && data.results && data.results[0];
+    if (!r0 || !r0.ok) {
+      const rp = r0 && r0.resp;
+      const detail = rp ? (rp.message || rp.error || (typeof rp === 'string' ? rp : JSON.stringify(rp))) : 'brak szczegółów';
+      alert('SMS się nie udał: ' + detail);
+    } else {
+      closeModal('lessonSmsModal');
+      alert('SMS wysłany ✅');
+    }
+  } catch (e) {
+    alert('SMS się nie udał: ' + (e.message || e));
   }
 }
 
@@ -4563,6 +4627,23 @@ document.querySelectorAll('.modal-backdrop').forEach(b => {
   </div>
 </div>
 
+<!-- MODAL: SMS do zapisanej pary (potwierdzenie / zmiana / odwołanie) -->
+<div class="modal-bg" id="smsModal">
+  <div class="modal">
+    <h3>SMS do pary</h3>
+    <p class="hint" id="smsInfo" style="margin:2px 0 0"></p>
+    <input type="hidden" id="smsLessonId">
+    <label style="margin-top:10px">Telefon</label>
+    <input id="smsPhone" type="tel" placeholder="np. 600100200" autocomplete="off">
+    <label style="margin-top:10px">Treść wiadomości</label>
+    <textarea id="smsText" rows="4" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--line,#ccc);border-radius:8px"></textarea>
+    <div class="foot">
+      <button class="btn" onclick="closeModal('smsModal')">Anuluj</button>
+      <button class="btn btn-primary" onclick="sendLessonSms()">📱 Wyślij SMS</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: nowa lekcja indywidualna -->
 <div class="modal-bg" id="addModal">
   <div class="modal">
@@ -4700,7 +4781,7 @@ function lessonHtml(l){
     <div class="l-pair ${booked?'':'free'}">${booked ? icon+' <span class="who">'+esc(l.pair)+'</span>' : 'Wolny termin'}</div>
     <div class="l-actions">
       ${booked
-        ? `<button class="btn btn-sm grow" onclick="unbook('${l.id}')">✕ Wypisz</button>`
+        ? `<button class="btn btn-sm grow" onclick="openLessonSms('${l.id}')" title="Wyślij SMS do pary">📱 SMS</button><button class="btn btn-sm" onclick="unbook('${l.id}')">✕ Wypisz</button>`
         : `<button class="btn btn-sm btn-primary grow" onclick="openBook('${l.id}')">＋ Zapisz parę</button>`}
       ${weekend ? '' : `<button class="btn btn-sm btn-danger" onclick="delLesson('${l.id}')" title="Usuń lekcję">🗑</button>`}
     </div>
@@ -4748,6 +4829,32 @@ async function unbook(id){
   const { error } = await sb.rpc('trainer_set_pair', { p_pin: pin, p_id: id, p_pair: '', p_people: 2 });
   if(error){ toast('Nie udało się wypisać: '+(error.message||error), true); return; }
   toast('Termin zwolniony'); load();
+}
+
+// ---- SMS do zapisanej pary (potwierdzenie online / zmiana / odwołanie) ----
+function openLessonSms(id){
+  const l=lessons.find(x=>x.id===id); if(!l) return;
+  document.getElementById('smsLessonId').value=id;
+  document.getElementById('smsInfo').textContent =
+    (l.pair||'')+' · '+dayName(l.date)+' '+fmtDM(l.date)+', '+l.start_time+' · '+l.style+' · '+l.trainer;
+  document.getElementById('smsPhone').value='';
+  const school=(typeof TAKT_CONFIG!=='undefined' && TAKT_CONFIG.schoolName)?TAKT_CONFIG.schoolName:'Szkoła tańca';
+  document.getElementById('smsText').value =
+    `Potwierdzamy lekcje ${l.style} ${dayName(l.date)} ${fmtDM(l.date)} o ${l.start_time} u ${l.trainer}. Do zobaczenia! ${school}`;
+  openModal('smsModal');
+}
+async function sendLessonSms(){
+  const phone=document.getElementById('smsPhone').value.trim();
+  const text=document.getElementById('smsText').value.trim();
+  if(!phone){ toast('Wpisz numer telefonu.', true); return; }
+  if(!text){ toast('Wpisz treść wiadomości.', true); return; }
+  try{
+    const { data, error } = await sb.functions.invoke('send-sms', { body: { items: [{ to: normalizePhone(phone), text: deaccent(text) }] } });
+    if(error) throw error;
+    const r0 = data && data.results && data.results[0];
+    if(!r0 || !r0.ok){ const rp=r0&&r0.resp; toast('SMS się nie udał'+(rp?': '+(rp.message||rp.error||''):''), true); return; }
+    closeModal('smsModal'); toast('SMS wysłany ✅');
+  }catch(err){ toast('SMS się nie udał: '+(err.message||err), true); }
 }
 
 // ---- usuwanie lekcji (tylko Czw/Pt; szkolenia zarządzane z komputera) ----
