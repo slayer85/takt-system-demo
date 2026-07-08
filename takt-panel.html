@@ -91,10 +91,76 @@ window.TAKT_SB = _auth;            // oba widoki używają tego (zalogowanego) k
 window.taktLogout = function(){ _auth.auth.signOut().then(function(){ location.reload(); }); };
 function _taktShowApp(){
   document.getElementById('taktLogin').style.display = 'none';
+  document.getElementById('taktMfaLogin').style.display = 'none';
   document.getElementById('taktToggle').style.display = '';
   document.getElementById('taktLogoutBtn').style.display = '';
+  document.getElementById('taktMfaBtn').style.display = '';
   window.TAKT_AUTHED = true;
   taktBoot();
+}
+// ── 2FA / TOTP (opcjonalne — trener włącza jako dodatkowe bezpieczeństwo) ──
+let _mfaEnrollId = null, _mfaVerifiedId = null;
+async function mfaStatus(){
+  try { const { data } = await _auth.auth.mfa.listFactors(); const t = (data && data.totp) || []; return { verified: t.find(f => f.status === 'verified'), factors: t }; }
+  catch(e){ return { verified: null, factors: [] }; }
+}
+async function mfaRequiredNow(){
+  try { const { data } = await _auth.auth.mfa.getAuthenticatorAssuranceLevel(); return !!data && data.currentLevel === 'aal1' && data.nextLevel === 'aal2'; }
+  catch(e){ return false; }
+}
+function showMfaLogin(){ document.getElementById('taktLogin').style.display = 'none'; document.getElementById('taktMfaLogin').style.display = 'flex'; }
+async function mfaVerifyLogin(){
+  const code = (document.getElementById('taktMfaCode').value || '').split(' ').join('');
+  const err = document.getElementById('taktMfaLoginErr'); err.textContent = 'Sprawdzam…';
+  const { verified } = await mfaStatus();
+  if (!verified) { err.textContent = 'Brak aktywnego 2FA na koncie.'; return; }
+  const { error } = await _auth.auth.mfa.challengeAndVerify({ factorId: verified.id, code });
+  if (error) { err.textContent = 'Błędny kod — spróbuj ponownie.'; return; }
+  document.getElementById('taktMfaLogin').style.display = 'none';
+  _taktShowApp();
+}
+function mfaClose(){ document.getElementById('taktMfa').style.display = 'none'; }
+async function mfaOpen(){ document.getElementById('taktMfa').style.display = 'flex'; await mfaRender(); }
+async function mfaRender(){
+  const body = document.getElementById('taktMfaBody');
+  body.innerHTML = '<div style="color:#666">Ładowanie…</div>';
+  const { verified } = await mfaStatus();
+  if (verified) {
+    _mfaVerifiedId = verified.id;
+    body.innerHTML = '<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:12px;color:#065f46">✅ 2FA jest <b>włączone</b> — przy logowaniu wymagany jest kod z aplikacji.</div>'
+      + '<button onclick="mfaDisable()" style="margin-top:14px;background:#fee2e2;color:#dc2626;border:none;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer">Wyłącz 2FA</button>';
+  } else {
+    body.innerHTML = '<button onclick="mfaEnrollStart()" style="background:#D62B1F;color:#fff;border:none;border-radius:9px;padding:11px 16px;font-weight:800;cursor:pointer">Włącz 2FA (kod QR)</button>';
+  }
+}
+async function mfaEnrollStart(){
+  const body = document.getElementById('taktMfaBody');
+  body.innerHTML = '<div style="color:#666">Generuję kod QR…</div>';
+  const { data, error } = await _auth.auth.mfa.enroll({ factorType: 'totp' });
+  if (error) { body.innerHTML = '<div style="color:#dc2626">Błąd: ' + (error.message || error) + '</div>'; return; }
+  _mfaEnrollId = data.id;
+  const qr = data.totp && data.totp.qr_code, secret = data.totp && data.totp.secret;
+  body.innerHTML =
+    '<ol style="font-size:.86rem;color:#333;padding-left:18px;margin:0 0 10px"><li>Zeskanuj kod w Google / Microsoft Authenticator</li><li>Wpisz 6-cyfrowy kod z aplikacji</li></ol>'
+    + (qr ? '<div style="text-align:center"><img src="' + qr + '" alt="QR 2FA" style="width:180px;height:180px"></div>' : '')
+    + (secret ? '<div style="font-size:.76rem;color:#666;text-align:center;margin:6px 0;word-break:break-all">lub ręcznie: <code>' + secret + '</code></div>' : '')
+    + '<input id="taktMfaEnrollCode" inputmode="numeric" placeholder="6-cyfrowy kod" style="width:100%;box-sizing:border-box;padding:10px;margin-top:8px;border:1px solid #ccc;border-radius:9px;text-align:center;letter-spacing:.2em;font-size:1.05rem">'
+    + '<button onclick="mfaEnrollVerify()" style="width:100%;margin-top:10px;background:#D62B1F;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:800;cursor:pointer">Potwierdź i włącz</button>'
+    + '<div id="taktMfaEnrollErr" style="color:#dc2626;font-size:.82rem;margin-top:8px"></div>';
+}
+async function mfaEnrollVerify(){
+  const code = (document.getElementById('taktMfaEnrollCode').value || '').split(' ').join('');
+  const err = document.getElementById('taktMfaEnrollErr'); err.textContent = 'Sprawdzam…';
+  const { error } = await _auth.auth.mfa.challengeAndVerify({ factorId: _mfaEnrollId, code });
+  if (error) { err.textContent = 'Błędny kod: ' + (error.message || error); return; }
+  await mfaRender();
+}
+async function mfaDisable(){
+  if (!_mfaVerifiedId) return;
+  if (!confirm('Wyłączyć 2FA? Logowanie znów będzie wymagać tylko hasła.')) return;
+  const { error } = await _auth.auth.mfa.unenroll({ factorId: _mfaVerifiedId });
+  if (error) { alert('Nie udało się wyłączyć 2FA: ' + (error.message || error)); return; }
+  await mfaRender();
 }
 async function taktLogin(){
   const email = document.getElementById('taktEmail').value.trim();
@@ -104,15 +170,21 @@ async function taktLogin(){
   const { error } = await _auth.auth.signInWithPassword({ email: email, password: pass });
   if (error) { err.textContent = 'Błąd logowania: ' + (error.message || error); return; }
   err.textContent = '';
+  if (await mfaRequiredNow()) { showMfaLogin(); return; }
   _taktShowApp();
 }
 async function taktStart(){
-  try { const { data } = await _auth.auth.getSession(); if (data && data.session) { _taktShowApp(); return; } } catch(e){}
+  try {
+    const { data } = await _auth.auth.getSession();
+    if (data && data.session) { if (await mfaRequiredNow()) { showMfaLogin(); return; } _taktShowApp(); return; }
+  } catch(e){}
   document.getElementById('taktLogin').style.display = 'flex';
 }
 document.addEventListener('DOMContentLoaded', taktStart);
 document.addEventListener('keydown', function(e){
-  if (e.key === 'Enter' && document.getElementById('taktLogin').style.display !== 'none') taktLogin();
+  if (e.key !== 'Enter') return;
+  if (document.getElementById('taktLogin').style.display !== 'none') taktLogin();
+  else if (document.getElementById('taktMfaLogin').style.display !== 'none') mfaVerifyLogin();
 });
 </script>
 </head>
@@ -129,6 +201,30 @@ document.addEventListener('keydown', function(e){
 </div>
 <button id="taktToggle" onclick="taktToggle()" title="Przełącz między widokiem mobilnym a pełnym" style="display:none;position:fixed;right:14px;bottom:14px;z-index:99999;background:#D62B1F;color:#fff;border:none;border-radius:22px;padding:10px 16px;font:600 .85rem system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 18px -6px rgba(0,0,0,.5);opacity:.92"><span id="taktToggleLbl">przełącz widok</span></button>
 <button id="taktLogoutBtn" onclick="taktLogout()" style="display:none;position:fixed;right:14px;bottom:54px;z-index:99999;background:#1a1a1a;color:#fff;border:1px solid #444;border-radius:22px;padding:8px 14px;font:600 .8rem system-ui;cursor:pointer">Wyloguj</button>
+<button id="taktMfaBtn" onclick="mfaOpen()" title="Logowanie dwuetapowe (2FA)" style="display:none;position:fixed;right:14px;bottom:94px;z-index:99999;background:#1a1a1a;color:#fff;border:1px solid #444;border-radius:22px;padding:8px 14px;font:600 .8rem system-ui;cursor:pointer">🔒 2FA</button>
+
+<!-- Ekran kodu 2FA przy logowaniu -->
+<div id="taktMfaLogin" style="display:none;position:fixed;inset:0;z-index:99998;background:#141210;color:#fff;align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+  <div style="background:#1d1a17;border:1px solid #3a342b;border-radius:16px;padding:32px;width:100%;max-width:340px">
+    <div style="font-weight:900;letter-spacing:.16em;font-size:1.3rem">T<span style="color:#D62B1F">A</span>KT</div>
+    <div style="color:#c9c4b9;font-size:.85rem;margin:4px 0 18px">Weryfikacja dwuetapowa — wpisz kod z aplikacji uwierzytelniającej</div>
+    <input id="taktMfaCode" inputmode="numeric" placeholder="6-cyfrowy kod" style="width:100%;box-sizing:border-box;padding:11px;margin-bottom:12px;border-radius:9px;border:1px solid #3a342b;background:#141210;color:#fff;letter-spacing:.2em;text-align:center;font-size:1.1rem">
+    <button onclick="mfaVerifyLogin()" style="width:100%;padding:12px;border:none;border-radius:9px;background:#D62B1F;color:#fff;font-weight:800;cursor:pointer">Zaloguj</button>
+    <div id="taktMfaLoginErr" style="color:#ff8a80;font-size:.82rem;margin-top:10px;min-height:1em"></div>
+    <button onclick="window.taktLogout&&window.taktLogout()" style="margin-top:12px;background:none;border:none;color:#8f887b;font-size:.8rem;cursor:pointer;text-decoration:underline">Anuluj / wyloguj</button>
+  </div>
+</div>
+
+<!-- Zarządzanie 2FA -->
+<div id="taktMfa" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(20,18,16,.7);align-items:center;justify-content:center;font-family:system-ui,sans-serif">
+  <div style="background:#fff;color:#1a1a1a;border-radius:16px;padding:26px;width:100%;max-width:420px;max-height:90vh;overflow:auto">
+    <h3 style="margin:0 0 4px">🔒 Logowanie dwuetapowe (2FA)</h3>
+    <p style="color:#666;font-size:.86rem;margin:0 0 14px">Dodatkowe zabezpieczenie konta. Po włączeniu, przy każdym logowaniu poprosimy o 6-cyfrowy kod z aplikacji Google Authenticator lub Microsoft Authenticator. Zalecane.</p>
+    <div id="taktMfaBody"></div>
+    <div style="text-align:right;margin-top:16px"><button onclick="mfaClose()" style="background:#eee;border:none;border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer">Zamknij</button></div>
+  </div>
+</div>
+
 <div id="appHost"></div>
 
 <template id="app-desktop">
