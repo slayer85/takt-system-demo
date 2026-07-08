@@ -2304,6 +2304,7 @@ function renderParticipants() {
       <td><strong>${esc(p.lastName)}</strong></td>
       <td><span class="chip">${esc(p.group)}</span></td>
       <td>${partnerCell}</td>
+      <td>${p.phone ? esc(p.phone) : '<span style="color:var(--text-muted);font-size:.82rem">—</span>'}</td>
       <td><span class="badge badge-info">${payCount} wpł.</span></td>
       <td style="white-space:nowrap">
         <button class="btn btn-ghost btn-sm" onclick="openParticipantModal('${p.id}')">✏️ Edytuj</button>
@@ -2314,7 +2315,7 @@ function renderParticipants() {
 
   document.getElementById('participantTableWrap').innerHTML = `
     <table>
-      <thead><tr><th>Imię</th><th>Nazwisko</th><th>Grupa</th><th>Powiązanie</th><th>Wpłaty</th><th>Akcje</th></tr></thead>
+      <thead><tr><th>Imię</th><th>Nazwisko</th><th>Grupa</th><th>Powiązanie</th><th>Telefon</th><th>Wpłaty</th><th>Akcje</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
