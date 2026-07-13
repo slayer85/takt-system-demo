@@ -126,6 +126,16 @@
   </div>
 </div>
 
+<!-- Modal: dodaj do kalendarza (po zapisie) -->
+<div class="modal-bg" id="calModal">
+  <div class="modal" style="text-align:center">
+    <h3>✅ Zapisano!</h3>
+    <div class="hint" id="calInfo" style="margin:8px 0 16px"></div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="downloadIcs()">📅 Dodaj do kalendarza</button>
+    <button class="btn btn-ghost" style="width:100%" onclick="closeCal()">Gotowe</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -210,7 +220,7 @@ function slotHtml(l, dayLabel){
     </div>
     ${ taken
         ? `<span class="taken-lbl">✓ Zajęte</span>`
-        : `<button class="btn btn-primary" onclick="openBook('${l.id}','${dayLabel}','${l.start_time}','${l.style}','${esc(l.trainer).replace(/'/g,"\\'")}',${price})">Zapisz parę</button>` }
+        : `<button class="btn btn-primary" onclick="openBook('${l.id}','${dayLabel}','${l.start_time}','${l.style}','${esc(l.trainer).replace(/'/g,"\\'")}',${price},'${l.date}')">Zapisz parę</button>` }
   </div>`;
 }
 
@@ -235,6 +245,7 @@ function dayHtml(name, dateObj, slots){
 
 let people=2;
 let currentPrice=120;
+let calData=null;
 function setPeople(n){
   people=n;
   document.getElementById('segPara').classList.toggle('active', n===2);
@@ -245,9 +256,10 @@ function setPeople(n){
   inp.placeholder = n===1 ? 'np. Anna Nowak' : 'np. Jan Kowalski & Anna Nowak';
 }
 
-function openBook(id, dayLabel, start, style, trainer, price){
+function openBook(id, dayLabel, start, style, trainer, price, date){
   currentSlotId=id;
   currentPrice=(price!=null)?price:120;
+  calData={date:date,start:start,style:style,trainer:trainer};
   document.getElementById('pairInput').value='';
   setPeople(2);
   document.getElementById('bookInfo').innerHTML=`<strong>${dayLabel}</strong>, ${start} – ${addMin(start,45)}<br>${style==='LA'?'Latin (LA)':'Standard (ST)'} · ${trainer} · <strong>${currentPrice} zł</strong>`;
@@ -264,8 +276,31 @@ async function confirmBook(){
   closeBook();
   toast('Zapisano! 🎉');
   render();
+  openCal();
 }
 
+function icsEsc(s){ s=String(s||''); s=s.split('\\').join('\\\\'); s=s.split('\n').join('\\n'); s=s.split(';').join('\\;'); s=s.split(',').join('\\,'); return s; }
+function _p2(n){ return String(n).padStart(2,'0'); }
+function downloadIcs(){
+  if(!calData) return;
+  const [y,mo,d]=calData.date.split('-');
+  const [h,mi]=calData.start.split(':');
+  const endM=(+h)*60+(+mi)+45;
+  const dtS=`${y}${mo}${d}T${_p2(h)}${_p2(mi)}00`;
+  const dtE=`${y}${mo}${d}T${_p2(Math.floor(endM/60))}${_p2(endM%60)}00`;
+  const nn=new Date();
+  const stamp=`${nn.getUTCFullYear()}${_p2(nn.getUTCMonth()+1)}${_p2(nn.getUTCDate())}T${_p2(nn.getUTCHours())}${_p2(nn.getUTCMinutes())}${_p2(nn.getUTCSeconds())}Z`;
+  const sn=calData.style==='LA'?'Latin (LA)':'Standard (ST)';
+  const title='Lekcja tańca '+sn+' — '+calData.trainer;
+  const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TAKT//Zapisy//PL','CALSCALE:GREGORIAN','METHOD:PUBLISH','BEGIN:VEVENT','UID:'+dtS+'-'+String(calData.trainer||'').replace(/[^a-zA-Z0-9]/g,'')+'@takt','DTSTAMP:'+stamp,'DTSTART:'+dtS,'DTEND:'+dtE,'SUMMARY:'+icsEsc(title),'LOCATION:'+icsEsc('Studio Demo TAKT'),'DESCRIPTION:'+icsEsc('Rezerwacja lekcji indywidualnej.'),'BEGIN:VALARM','TRIGGER:-PT2H','ACTION:DISPLAY','DESCRIPTION:Lekcja tanca za 2h','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='lekcja-tanca.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function openCal(){ if(!calData) return; const p=calData.date.split('-'); document.getElementById('calInfo').textContent=p[2]+'.'+p[1]+' o '+calData.start+' · '+calData.trainer; document.getElementById('calModal').classList.add('open'); }
+function closeCal(){ document.getElementById('calModal').classList.remove('open'); }
 function subscribe(){
   sb.channel('lessons-rt')
     .on('postgres_changes',{ event:'*', schema:'public', table:'lessons' }, ()=>render())
