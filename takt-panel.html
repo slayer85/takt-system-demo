@@ -2,7 +2,6 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://ecoqpvfcumflkyluylcr.supabase.co wss://ecoqpvfcumflkyluylcr.supabase.co; object-src 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -1101,11 +1100,16 @@
             display:flex;justify-content:space-between;align-items:center;}
   .day-head .cnt{color:var(--gold);font-size:.8rem;font-weight:700;}
   .day-body{padding:10px;display:grid;gap:8px;}
-  .trainer-cols{display:flex;flex-direction:row;gap:8px;flex-wrap:nowrap;align-items:flex-start;}
+  .trainer-cols{display:flex;flex-direction:row;gap:6px;flex-wrap:nowrap;align-items:flex-start;}
   .trainer-col{flex:1 1 0;min-width:0;background:#fff;border:1px solid var(--line);border-radius:11px;overflow:hidden;}
-  .trainer-head{background:#1a1a1a;color:#fff;font-weight:800;font-size:.82rem;padding:8px 10px;border-bottom:3px solid var(--gold);text-align:center;}
-  .trainer-col-body{padding:7px;display:flex;flex-direction:column;gap:8px;}
-  @media(max-width:560px){.trainer-cols{flex-wrap:wrap;}.trainer-col{flex:1 1 150px;min-width:150px;}}
+  .trainer-head{background:#1a1a1a;color:#fff;font-weight:800;font-size:.78rem;padding:7px 6px;border-bottom:3px solid var(--gold);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .trainer-col-body{padding:6px;display:flex;flex-direction:column;gap:7px;}
+  .trainer-col-body .lesson{padding:8px;}
+  .trainer-col-body .l-top{gap:4px;}
+  .trainer-col-body .l-price{margin-left:0;}
+  .trainer-col-body .l-actions{flex-direction:column;gap:6px;}
+  .trainer-col-body .l-actions .btn{width:100%;}
+  @media(max-width:520px){.trainer-cols{flex-wrap:wrap;}.trainer-col{flex:1 1 140px;min-width:140px;}}
   .day .empty{color:var(--muted);font-size:.85rem;text-align:center;padding:10px 0;}
 
   .lesson{border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:#fafafa;}
