@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Zapisy na lekcje</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
 <style>
   :root{ --gold:#D62B1F; --bg:#f4f4f5; --card:#fff; --border:#e5e5e5; --text:#1a1a1a; --muted:#6b6560; }
   *{ box-sizing:border-box; }
@@ -118,6 +118,9 @@
     </div>
     <label class="hint" id="nameLbl">Nazwa Waszej pary</label>
     <input type="text" id="pairInput" placeholder="np. Jan Kowalski &amp; Anna Nowak" autocomplete="off">
+    <label class="hint" style="margin-top:8px">Telefon (opcjonalnie — trener potwierdzi SMS-em)</label>
+    <input type="tel" id="phoneInput" placeholder="np. 600 100 200" autocomplete="tel" inputmode="tel">
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:.8rem;color:var(--muted);margin:8px 0 4px;cursor:pointer"><input type="checkbox" id="phoneConsent" style="margin-top:2px"><span>Zgadzam się na kontakt SMS w sprawie tej rezerwacji.</span></label>
     <div class="price-line">Do zapłaty: <b id="priceVal">120 zł</b> <span>· za lekcję, płatne u trenera</span></div>
     <div class="row">
       <button class="btn btn-ghost" onclick="closeBook()">Anuluj</button>
@@ -150,6 +153,15 @@ const TAKT_CONFIG = {
 const SUPABASE_URL      = TAKT_CONFIG.supabaseUrl;
 const SUPABASE_ANON_KEY = TAKT_CONFIG.supabaseAnonKey;
 
+if (typeof supabase === 'undefined' || !supabase.createClient) {
+  try {
+    var _re = sessionStorage.getItem('taktReload');
+    if (!_re) { sessionStorage.setItem('taktReload','1'); setTimeout(function(){ location.reload(); }, 1200); }
+    document.documentElement.innerHTML = '<body style="margin:0;font-family:system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:#1a1a1a;color:#fff"><div><p style="margin:0 0 14px">Ładowanie aplikacji nie powiodło się — sprawdź internet i odśwież.</p><button onclick="location.reload()" style="padding:12px 20px;border:none;border-radius:9px;background:#c9a84c;color:#1a1a1a;font-weight:800;cursor:pointer">Odśwież</button></div></body>';
+  } catch(e) {}
+  throw new Error('supabase-js not loaded');
+}
+try { sessionStorage.removeItem('taktReload'); } catch(e){}
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let week = 0;            // 0 = bieżący tydzień
 let pin = '';
@@ -261,6 +273,8 @@ function openBook(id, dayLabel, start, style, trainer, price, date){
   currentPrice=(price!=null)?price:120;
   calData={date:date,start:start,style:style,trainer:trainer};
   document.getElementById('pairInput').value='';
+  document.getElementById('phoneInput').value='';
+  document.getElementById('phoneConsent').checked=false;
   setPeople(2);
   document.getElementById('bookInfo').innerHTML=`<strong>${dayLabel}</strong>, ${start} – ${addMin(start,45)}<br>${style==='LA'?'Latin (LA)':'Standard (ST)'} · ${trainer} · <strong>${currentPrice} zł</strong>`;
   document.getElementById('bookModal').classList.add('open');
@@ -271,7 +285,10 @@ function closeBook(){ document.getElementById('bookModal').classList.remove('ope
 async function confirmBook(){
   const pair=document.getElementById('pairInput').value.trim();
   if(!pair){ toast(people===1?'Wpisz imię i nazwisko.':'Wpisz nazwę pary.', true); return; }
-  const { error } = await sb.rpc('book_slot',{ p_id:currentSlotId, p_pair:pair, p_pin:pin, p_people:people });
+  const phone=document.getElementById('phoneInput').value.trim();
+  const consent=document.getElementById('phoneConsent').checked;
+  if(phone && !consent){ toast('Zaznacz zgodę na SMS albo usuń numer.', true); return; }
+  const { error } = await sb.rpc('book_slot',{ p_id:currentSlotId, p_pair:pair, p_pin:pin, p_people:people, p_phone: consent?phone:'' });
   if(error){ toast(error.message||'Nie udało się zapisać', true); render(); return; }
   closeBook();
   toast('Zapisano! 🎉');
