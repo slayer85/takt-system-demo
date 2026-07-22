@@ -183,16 +183,16 @@
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media(max-width:640px) { .two-col { grid-template-columns: 1fr; } nav button { padding: 12px 12px; font-size: .82rem; } }
   .uz-grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
-  @media(max-width:900px) { .uz-grid { grid-template-columns: 1fr; } }
+  @media(max-width:900px) { .uz-grid { grid-template-columns: 1fr; } .uz-grid > .card { min-width: 0; } }
   /* --- Widok na telefonie: nic nie rozpycha strony w poziomie --- */
   @media(max-width:760px) {
     html, body { max-width: 100%; overflow-x: hidden; }
     main { padding: 14px 10px; }
-    .card { padding: 14px; }
+    .card { padding: 14px; min-width: 0; }
     nav { padding: 0 8px; }
     nav button { padding: 12px 10px; font-size: .82rem; white-space: nowrap; }
     /* szerokie tabele przewijają się WEWNĄTRZ, zamiast rozpychać ekran */
-    #participantTableWrap, #platnosciList, #savedMonthContent, #statsTableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    #participantTableWrap, #platnosciList, #savedMonthContent, #statsTableWrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
     table { font-size: .82rem; white-space: nowrap; }
     /* pola i rzędy filtrów zawijają się i mogą się zwężać */
     input[type="text"], input[type="search"] { min-width: 0; }
