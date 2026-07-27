@@ -332,8 +332,8 @@
     <div style="font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:600">System Wpłat</div>
     <div id="brandSub" style="font-size:.85rem;opacity:.7;margin-top:2px">Zarządzanie uczestnikami i kontrola opłat</div>
   </div>
-  <div id="branchSwitcherZone" style="margin-left:auto"></div>
-  <div class="backup-status" id="backupStatusChip" title="Status auto-zapisu" style="cursor:default">
+  <div id="branchSwitcherZone"></div>
+  <div class="backup-status" id="backupStatusChip" title="Status auto-zapisu" style="cursor:default;margin-left:auto">
     <span class="backup-dot off" id="backupDot"></span>
     <span id="backupStatusText" style="color:rgba(255,255,255,.6)">Auto-zapis: —</span>
   </div>
@@ -345,6 +345,7 @@
 </div>
 
 <nav>
+  <button onclick="showTab('filie')">🏢 Wszystkie filie</button>
   <button class="active" onclick="showTab('uczestnicy')">👥 Uczestnicy</button>
   <button onclick="showTab('platnosci')">💵 Płatności</button>
   <button onclick="showTab('wplaty')">🔍 Analiza przelewów</button>
@@ -352,7 +353,6 @@
   <button id="navGrafik" onclick="showTab('grafik')">🗓 Grafik</button>
   <button id="navSzkolenia" onclick="showTab('szkolenia')">🎓 Szkolenia</button>
   <button onclick="showTab('backup')">💾 Backup</button>
-  <button onclick="showTab('filie')">🏢 Wszystkie filie</button>
 </nav>
 
 <main>
