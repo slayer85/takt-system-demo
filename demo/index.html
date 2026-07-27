@@ -31,6 +31,27 @@
   .week-nav{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:8px; }
   .week-nav button{ width:40px; height:40px; border:none; border-radius:9px; background:#f0ede6; font-size:1.2rem; cursor:pointer; }
   .week-nav .lbl{ font-weight:700; min-width:150px; text-align:center; font-size:.95rem; }
+  .app-layout{ display:flex; align-items:flex-start; gap:12px; }
+  .tab-rail{ display:flex; flex-direction:column; align-items:center; gap:6px; background:#efeeec; border:1px solid var(--border); border-radius:12px; flex-shrink:0; width:48px; padding:10px 0; }
+  .tab-wrap{ position:relative; }
+  .tab{ position:relative; width:36px; height:36px; border-radius:9px; border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#8a8378; }
+  .tab svg{ width:19px; height:19px; }
+  .tab::before{ content:''; position:absolute; left:-16px; top:50%; transform:translateY(-50%); width:3px; height:22px; border-radius:3px; background:var(--gold); opacity:0; transition:opacity .12s; }
+  .tab.active{ background:#fff; color:var(--gold); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .tab.active::before{ opacity:1; }
+  .tab:hover:not(.active){ background:rgba(0,0,0,.06); color:var(--text); }
+  .tab .tip{ position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%) translateX(-4px); background:#1a1a1a; color:#fff; font-size:.72rem; font-weight:600; white-space:nowrap; padding:5px 9px; border-radius:6px; opacity:0; pointer-events:none; transition:opacity .12s, transform .12s; z-index:20; }
+  .tab:hover .tip{ opacity:1; transform:translateY(-50%) translateX(0); }
+  .flyout{ position:absolute; left:calc(100% + 6px); top:0; width:230px; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 12px 30px -10px rgba(0,0,0,.28); padding:6px; z-index:30; display:none; text-align:left; }
+  .flyout.open{ display:block; }
+  .flyout-head{ padding:8px 8px 6px; font-size:.75rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .flyout-item{ display:block; width:100%; text-align:left; background:none; border:none; padding:9px 8px; border-radius:7px; cursor:pointer; color:var(--text); font:inherit; }
+  .flyout-item:hover{ background:var(--bg); }
+  .flyout-item .name{ font-size:.86rem; font-weight:700; }
+  .flyout-item .range{ font-size:.74rem; color:var(--muted); margin-top:1px; }
+  .flyout-empty{ padding:9px 8px; font-size:.82rem; color:var(--muted); font-style:italic; }
+  .app-content{ flex:1 1 0; min-width:0; }
+  @media(max-width:480px){ .tab-rail{ width:42px; } .tab{ width:32px; height:32px; } }
   .day-title{ font-weight:800; margin:22px 0 10px; font-size:1.05rem; }
   .trainer-cols{ display:flex; flex-direction:row; gap:8px; flex-wrap:nowrap; align-items:flex-start; }
   .trainer-col{ flex:1 1 0; min-width:0; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
@@ -94,15 +115,41 @@
 
   <!-- Ekran grafiku -->
   <div id="app" class="hidden">
-    <div class="card">
-      <div class="week-nav">
-        <button onclick="changeWeek(-1)">‹</button>
-        <span class="lbl" id="weekLabel"></span>
-        <button onclick="changeWeek(1)">›</button>
+    <div class="app-layout">
+      <div class="tab-rail">
+        <button type="button" class="tab active" id="tabWeekly" onclick="switchKind('weekly')" title="Lekcje indywidualne">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="4.5" r="1.6"/><circle cx="16" cy="4.5" r="1.6"/>
+            <path d="M8 8c-1.5 0-2.5 1-2.8 2.4L4 15l2 .6.9 5.4h2.2l.4-4h1l.4 4h2.2l.9-5.4 2 -.6-1.2-4.6C14.5 9 13.5 8 12 8"/>
+            <path d="M16 8c-1.3 0-2.2.8-2.6 2l-1 3.4"/>
+          </svg>
+          <span class="tip">Lekcje indywidualne</span>
+        </button>
+        <div class="tab-wrap" id="tabWeekendWrap">
+          <button type="button" class="tab" id="tabWeekend" onclick="toggleTrainingFlyout(event)" title="Szkolenia">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M6 10.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-5.5"/><path d="M22 8v6"/>
+            </svg>
+            <span class="tip">Szkolenia</span>
+          </button>
+          <div class="flyout" id="trainingFlyout">
+            <div class="flyout-head">Zapowiedziane szkolenia</div>
+            <div id="trainingFlyoutList"><div class="flyout-empty">Ładowanie…</div></div>
+          </div>
+        </div>
       </div>
-      <p class="hint" style="text-align:center;margin:0">Kliknij wolny termin, aby zapisać swoją parę. Zajęte terminy są wyszarzone.</p>
+      <div class="app-content">
+        <div class="card">
+          <div class="week-nav">
+            <button onclick="changeWeek(-1)">‹</button>
+            <span class="lbl" id="weekLabel"></span>
+            <button onclick="changeWeek(1)">›</button>
+          </div>
+          <p class="hint" style="text-align:center;margin:0">Kliknij wolny termin, aby zapisać swoją parę. Zajęte terminy są wyszarzone.</p>
+        </div>
+        <div class="days-row" id="daysRow"></div>
+      </div>
     </div>
-    <div class="days-row" id="daysRow"></div>
   </div>
 </main>
 
@@ -166,9 +213,17 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let week = 0;            // 0 = bieżący tydzień
 let pin = '';
 let currentSlotId = null;
+let viewKind = 'weekly'; // 'weekly' = lekcje indywidualne, 'weekend' = szkolenia
+let publicTrainings = null; // null = jeszcze nie pobrane
 
 // --- daty / tygodnie ---
 function mondayOf(off){ const d=new Date(); d.setHours(0,0,0,0); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow+off*7); return d; }
+function mondayOfDate(d){ const x=new Date(d); x.setHours(0,0,0,0); const dow=(x.getDay()+6)%7; x.setDate(x.getDate()-dow); return x; }
+function weekOffsetFor(dateStr){
+  const target = mondayOfDate(new Date(dateStr+'T00:00:00'));
+  const base = mondayOf(0);
+  return Math.round((target - base) / (7*86400000));
+}
 function weekdayDate(off,wd){ const d=mondayOf(off); d.setDate(d.getDate()+(wd==='czwartek'?3:4)); return d; }
 function fmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function fmtDM(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0'); }
@@ -207,7 +262,7 @@ async function render(){
   // (lekcje indywidualne Czw/Pt oraz szkolenia weekendowe Sob/Niedz).
   const { data, error } = await sb.from('lessons').select('*').gte('date',fmtDate(monday)).lte('date',fmtDate(sunday)).order('start_time');
   if(error){ toast('Błąd pobierania: '+error.message, true); return; }
-  const lessons = data || [];
+  const lessons = (data || []).filter(l => (l.kind || 'weekly') === viewKind);
 
   let html='';
   for(let i=0;i<7;i++){
@@ -217,9 +272,71 @@ async function render(){
     if(!dayLessons.length) continue;
     html += `<div class="day-block">` + dayHtml(cap(dayName(d)), d, dayLessons) + `</div>`;
   }
+  const emptyLabel = viewKind === 'weekend' ? 'szkoleń' : 'lekcji indywidualnych';
   document.getElementById('daysRow').innerHTML = html ||
-    `<div class="empty" style="padding:20px">Brak terminów w tym tygodniu. Sprawdź inny tydzień strzałkami ‹ ›.</div>`;
+    `<div class="empty" style="padding:20px">Brak ${emptyLabel} w tym tygodniu. Sprawdź inny tydzień strzałkami ‹ ›.</div>`;
 }
+
+function switchKind(kind){
+  viewKind = kind;
+  document.getElementById('tabWeekly').classList.toggle('active', kind==='weekly');
+  document.getElementById('tabWeekend').classList.toggle('active', kind==='weekend');
+  closeTrainingFlyout();
+  render();
+}
+
+function closeTrainingFlyout(){ document.getElementById('trainingFlyout').classList.remove('open'); }
+
+function toggleTrainingFlyout(e){
+  e.stopPropagation();
+  const flyout = document.getElementById('trainingFlyout');
+  const willOpen = !flyout.classList.contains('open');
+  switchKind('weekend'); // przełącza widok i zamyka flyout (patrz switchKind)
+  if (willOpen){
+    flyout.classList.add('open');
+    if (publicTrainings === null) fetchPublicTrainings(); else renderTrainingFlyout();
+  }
+}
+
+async function fetchPublicTrainings(){
+  document.getElementById('trainingFlyoutList').innerHTML = '<div class="flyout-empty">Ładowanie…</div>';
+  try{
+    const { data, error } = await sb.rpc('list_trainings_public');
+    if (error) throw error;
+    publicTrainings = data || [];
+  } catch(e){
+    publicTrainings = [];
+  }
+  renderTrainingFlyout();
+}
+
+function renderTrainingFlyout(){
+  const box = document.getElementById('trainingFlyoutList');
+  const list = publicTrainings || [];
+  if (!list.length){ box.innerHTML = '<div class="flyout-empty">Brak zaplanowanych szkoleń.</div>'; return; }
+  box.innerHTML = list.map(t => {
+    const range = (t.date_from===t.date_to) ? fmtDMfromISO(t.date_from) : (fmtDMfromISO(t.date_from)+' – '+fmtDMfromISO(t.date_to));
+    return `<button type="button" class="flyout-item" onclick="jumpToTraining('${t.date_from}');event.stopPropagation()">
+      <div class="name">${esc(t.name)}</div><div class="range">${range}</div>
+    </button>`;
+  }).join('');
+}
+
+function fmtDMfromISO(s){ const [y,m,d]=s.split('-'); return d+'.'+m; }
+
+function jumpToTraining(dateFromStr){
+  week = weekOffsetFor(dateFromStr);
+  closeTrainingFlyout();
+  render();
+}
+
+document.addEventListener('click', (e) => {
+  const flyout = document.getElementById('trainingFlyout');
+  const wrap = document.getElementById('tabWeekendWrap');
+  if (flyout && flyout.classList.contains('open') && wrap && !wrap.contains(e.target)) {
+    closeTrainingFlyout();
+  }
+});
 
 function slotHtml(l, dayLabel){
   const cls=l.style==='ST'?'st':'la';
