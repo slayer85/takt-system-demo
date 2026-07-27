@@ -53,12 +53,8 @@
   .app-content{ flex:1 1 0; min-width:0; }
   @media(max-width:480px){ .tab-rail{ width:42px; } .tab{ width:32px; height:32px; } }
   .day-title{ font-weight:800; margin:22px 0 10px; font-size:1.05rem; }
-  .trainer-cols{ display:flex; flex-direction:row; gap:8px; flex-wrap:nowrap; align-items:flex-start; }
-  .trainer-col{ flex:1 1 0; min-width:0; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
-  @media(max-width:760px){
-    .trainer-cols{ flex-wrap:wrap; }
-    .trainer-col{ flex:1 1 140px; min-width:140px; }
-  }
+  .trainer-cols{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; align-items:start; }
+  .trainer-col{ min-width:0; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .trainer-head{ background:#1a1a1a; color:#fff; font-weight:800; font-size:.9rem; padding:10px 13px; border-bottom:3px solid var(--accent); }
   .trainer-col-body{ padding:7px; display:flex; flex-direction:column; gap:8px; }
   .trainer-col-body .slot{ margin:0; flex-direction:column; align-items:stretch; gap:7px; padding:9px; }
