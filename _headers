@@ -1,0 +1,32 @@
+# SZABLON nagłówków dla Cloudflare Pages. Build podstawia:
+#   https://ecoqpvfcumflkyluylcr.supabase.co wss://ecoqpvfcumflkyluylcr.supabase.co  -> origin Supabase tego klienta (https + wss), z klienci/<id>.json
+#         -> '' gdy supabase.js jest self-hostowany, albo CDN gdy plik go używa
+#
+# Cloudflare Pages czyta ten plik i zamienia w nagłówki HTTP. GitHub Pages go ignoruje.
+#
+# script-src ma 'unsafe-inline', bo panel ma ~150 inline'owych onclick= i bloki <script> w HTML.
+# NIE dodawać tu nonce ani hashy — obecność nonce/hash KASUJE 'unsafe-inline' w CSP3 i wywali panel.
+# Nie ma 'unsafe-eval' — w kodzie nie ma eval() ani new Function(). Jeśli build ostrzega o CDN,
+# lepszym rozwiązaniem niż poszerzanie CSP jest self-host supabase.js (tak robi demo).
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://ecoqpvfcumflkyluylcr.supabase.co wss://ecoqpvfcumflkyluylcr.supabase.co; worker-src 'self' blob:
+
+# HTML zawsze świeży — apka się zmienia, a origin musi zostać ten sam (localStorage jest per-origin).
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# supabase.js jest self-hostowany i praktycznie nieruchomy.
+/*supabase.js
+  Cache-Control: public, max-age=86400
+
+# orgkey.js zmienia się RAZEM z panelem (rdzeń klucza organizacji), więc musi
+# być tak samo świeży jak HTML. Domyślne cache Cloudflare dałoby rozjazd:
+# nowy panel wołałby funkcje, których stara kopia rdzenia nie ma.
+/*orgkey.js
+  Cache-Control: public, max-age=0, must-revalidate

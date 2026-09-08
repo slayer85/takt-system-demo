@@ -294,6 +294,16 @@
       });
     });
   }
+  function idbDel(key) {
+    return idb().then(function (d) {
+      return new Promise(function (res, rej) {
+        var t = d.transaction(STORE, 'readwrite');
+        t.objectStore(STORE).delete(key);
+        t.oncomplete = function () { d.close(); res(true); };
+        t.onerror = function () { d.close(); rej(t.error); };
+      });
+    });
+  }
   function idbClear() {
     return idb().then(function (d) {
       return new Promise(function (res, rej) {
@@ -318,6 +328,29 @@
     var slot = 'keys:' + String(email || '').toLowerCase();
     return idbGet(slot).then(function (found) {
       if (found && found.priv) return found;
+      // ── PRZEJĘCIE STAREGO WPISU ──────────────────────────────────────
+      // Do wersji 2 klucz urządzenia leżał pod jednym wpisem `keys`, bez
+      // podziału na konta. Bez tego przejęcia aktualizacja rdzenia OSIEROCA
+      // istniejące urządzenia: panel generuje nowe, zgłasza je jako czekające
+      // i prosi o kod z „działającego" urządzenia — którego już nie ma.
+      // Przy dwóch urządzeniach właściciela oznaczałoby to zamknięcie go
+      // poza własnym skarbcem (złapane na demie 8.09.2026).
+      //
+      // Stary wpis KASUJEMY po przejęciu: przejmuje go PIERWSZE konto, które
+      // się zaloguje (praktycznie: właściciel tej przeglądarki), a każde
+      // następne dostaje własną, świeżą parę kluczy — czyli nie wracamy
+      // do współdzielenia `device_id` między kontami.
+      return idbGet('keys').then(function (legacy) {
+        if (legacy && legacy.priv) {
+          return idbPut(slot, legacy)
+            .then(function () { return idbDel('keys'); })
+            .then(function () { return legacy; });
+        }
+        return newDevice();
+      });
+    });
+
+    function newDevice() {
       return newDeviceKeyPair().then(function (pair) {
         return pubJwk(pair).then(function (jwk) {
           return fingerprint(jwk).then(function (fp) {
@@ -331,7 +364,7 @@
           });
         });
       });
-    });
+    }
   }
 
   /* ── SKARBIEC: wyłącznie w pamięci karty ───────────────────────────
@@ -359,12 +392,13 @@
        1 — pierwsza wersja
        2 — `isOpen()` uwzględnia klucze filii (ścieżka pracownika)
        3 — `deviceKeys(email)` — osobny klucz urządzenia per konto
+       4 — przejmowanie starego wpisu `keys`, żeby aktualizacja nie osieracała urządzeń
      Panel sprawdza to przy starcie i odmawia pracy na starszym rdzeniu.
      Powód: `orgkey.js` to OSOBNY plik, wgrywany ręcznie obok panelu —
      8.09.2026 przez pół godziny szukałem błędu w kryptografii, a na serwerze
      leżał po prostu stary rdzeń, w którym pracownik filii nigdy nie mógł
      otworzyć skarbca. Cicha rozbieżność wersji wygląda jak błąd logiki.     */
-  var CONTRACT = 3;
+  var CONTRACT = 4;
 
   root.TAKT_ORGKEY = {
     CONTRACT: CONTRACT,
