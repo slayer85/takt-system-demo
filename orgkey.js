@@ -305,10 +305,18 @@
     });
   }
 
-  // Zwraca klucze TEGO urządzenia, tworząc je przy pierwszym wejściu.
-  // `device_id` jest losowy i jawny — służy tylko do adresowania wiersza.
-  function deviceKeys() {
-    return idbGet('keys').then(function (found) {
+  /* Zwraca klucze TEGO urządzenia DLA TEGO KONTA, tworząc je przy pierwszym
+     wejściu. `device_id` jest losowy i jawny — służy tylko do adresowania wiersza.
+
+     ⚠️ `email` W KLUCZU SKŁADU JEST KONIECZNE. IndexedDB jest per ORIGIN, więc
+     bez rozdzielenia dwie osoby na tym samym komputerze (recepcja!) dzieliłyby
+     jeden `device_id` i jeden klucz prywatny urządzenia. Na demie 8.09.2026
+     skończyło się to nadpisaniem koperty właściciela kopertą pracownika filii.
+     Osobny klucz per konto zamyka to i przy okazji jest zdrowsze: dwie osoby
+     przy jednym komputerze nie dzielą już materiału kryptograficznego.        */
+  function deviceKeys(email) {
+    var slot = 'keys:' + String(email || '').toLowerCase();
+    return idbGet(slot).then(function (found) {
       if (found && found.priv) return found;
       return newDeviceKeyPair().then(function (pair) {
         return pubJwk(pair).then(function (jwk) {
@@ -319,7 +327,7 @@
               pub: jwk,
               fingerprint: fp
             };
-            return idbPut('keys', rec).then(function () { return rec; });
+            return idbPut(slot, rec).then(function () { return rec; });
           });
         });
       });
@@ -336,12 +344,30 @@
     v.lock = function () {
       v.orgKey = null; v.identityPriv = null; v.branches = {}; v.openedAt = null;
     };
-    v.isOpen = function () { return !!v.orgKey; };
+    // ⚠️ Otwarty skarbiec to „mam czym odczytać CHOĆ JEDNĄ filię", a nie
+    // „mam klucz organizacji". PRACOWNIK filii nigdy nie dostaje klucza
+    // organizacji — ma kopertę wprost do klucza swojej lokalizacji. Pierwsza
+    // wersja sprawdzała tylko `orgKey` i dla konta filii skarbiec był
+    // na zawsze zamknięty.
+    v.isOpen = function () { return !!(v.orgKey || Object.keys(v.branches).length); };
     v.branch = function (name) { return v.branches[name || ''] || null; };
     return v;
   }
 
+  /* WERSJA KONTRAKTU między tym plikiem a panelem. Podnosić przy KAŻDEJ
+     zmianie, która wymaga nowszego panelu albo nowszego rdzenia.
+       1 — pierwsza wersja
+       2 — `isOpen()` uwzględnia klucze filii (ścieżka pracownika)
+       3 — `deviceKeys(email)` — osobny klucz urządzenia per konto
+     Panel sprawdza to przy starcie i odmawia pracy na starszym rdzeniu.
+     Powód: `orgkey.js` to OSOBNY plik, wgrywany ręcznie obok panelu —
+     8.09.2026 przez pół godziny szukałem błędu w kryptografii, a na serwerze
+     leżał po prostu stary rdzeń, w którym pracownik filii nigdy nie mógł
+     otworzyć skarbca. Cicha rozbieżność wersji wygląda jak błąd logiki.     */
+  var CONTRACT = 3;
+
   root.TAKT_ORGKEY = {
+    CONTRACT: CONTRACT,
     // bajty
     b64: b64, unb64: unb64, aad: aad,
     // klucze
