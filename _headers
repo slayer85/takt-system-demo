@@ -25,8 +25,29 @@
 /*supabase.js
   Cache-Control: public, max-age=86400
 
-# orgkey.js zmienia się RAZEM z panelem (rdzeń klucza organizacji), więc musi
-# być tak samo świeży jak HTML. Domyślne cache Cloudflare dałoby rozjazd:
-# nowy panel wołałby funkcje, których stara kopia rdzenia nie ma.
+# orgkey.js i orgkey-panel.js są ładowane Z NUMEREM WERSJI w adresie
+# (`orgkey.js?v=5`, podnoszonym razem z `CONTRACT`), więc adres zmienia się
+# przy każdej zmianie treści. To pozwala — i każe — cache'ować je NA DŁUGO:
+# przeglądarka nigdy nie poda starego pliku pod nowym adresem.
+#
+# ⚠️ NIE wracać tu do `max-age=0`. Próbowałem 8.09.2026 i to nie działa:
+# strefa `takt-system.pl` ma Browser Cache TTL 4 h, które PODNOSI niskie
+# wartości (żywy Team oddawał `max-age=14400` mimo `max-age=0` tutaj).
+# Zmiana ustawienia strefy na „Respect Existing Headers" byłaby lekiem
+# gorszym od choroby: obrazy i fonty bez własnego Cache-Control straciłyby
+# cache przeglądarki na całej strefie, czyli też na Rising Stars i landingach.
+# Wersja w adresie rozwiązuje to per plik i nie zależy od ustawień strefy.
 /*orgkey.js
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
+
+/*orgkey-panel.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# pdf.js (vendor, wersja przypięta) — doczytywany dopiero, gdy ktoś wczyta wyciąg w PDF.
+# 1,5 MB, treść nigdy się nie zmienia pod tym samym `?v=`, więc `immutable` jest tu
+# szczególnie na miejscu: klient płaci za pobranie raz.
+/*pdf.min.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*pdf.worker.min.js
+  Cache-Control: public, max-age=31536000, immutable
