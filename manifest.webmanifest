@@ -1,6 +1,7 @@
 {
   "name": "Studio Demo TAKT",
   "short_name": "TAKT Demo",
+  "description": "Panel szkoły tańca TAKT — uczestnicy, wpłaty, grafik i lista obecności. Wersja demonstracyjna.",
   "start_url": "/takt-panel.html",
   "scope": "/",
   "display": "standalone",
