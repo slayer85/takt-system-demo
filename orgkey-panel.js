@@ -53,6 +53,10 @@
   // „są lokalne zmiany do wysłania" — też PER FILIA, bo każda ma własną paczkę.
   const DIRTY_KEY = 'takt_org_dirty';
   let orgPushTimer = null;
+  // Wysyłka w toku i licznik zmian. Bez blokady dwie wysyłki naraz (timer + „Wyślij teraz")
+  // brały ten sam numer wersji i druga kończyła się fałszywym KONFLIKTEM z samym sobą.
+  // Licznik: zmiana zrobiona W TRAKCIE wysyłki nie może zostać odhaczona jako wysłana.
+  let orgPushing = null, orgGen = 0;
   // Ostatnio widziane odciski kluczy — na tym stoi ostrzeżenie „klucz się zmienił".
   const FP_KEY = 'takt_org_fp';
 
@@ -340,8 +344,16 @@
      w AAD). Serwer wymusza monotoniczność, więc dwa urządzenia nie
      nadpiszą się cicho.                                                  */
   async function push(force) {
+    while (orgPushing) { try { await orgPushing; } catch (e) { /* wynik poprzedniej nas nie dotyczy */ } }
+    if (!force && bGet(DIRTY_KEY) !== '1') return true;   // poprzednia wysyłka zabrała już te zmiany
+    const p = pushJeden(force);
+    orgPushing = p;
+    try { return await p; } finally { if (orgPushing === p) orgPushing = null; }
+  }
+  async function pushJeden(force) {
     const b = br(), slot = ORG.vault.branch(b);
     if (!slot) return false;
+    const gen = orgGen;
     const ver = lastVer() + 1;
     try {
       const pack = await K.encryptPack(slot.key, paymentsScope(), b, slot.gen, ver);
@@ -350,8 +362,10 @@
         p_device: deviceName(), p_branch: b || null, p_force: !!force
       });
       bSet(VER_KEY, String(res.version));
-      bSet(DIRTY_KEY, '');
       LSset(SYNC_BASE_KEY, String(res.updated_at));
+      // Zmiany zrobione w trakcie wysyłki czekają na swój timer — flaga zostaje.
+      if (gen !== orgGen) { if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI(); return true; }
+      bSet(DIRTY_KEY, '');
       // SYNC_DIRTY_KEY jest GLOBALNY na demie i PER FILIA na Teamie (LSsetB),
       // więc czyścimy oba warianty — inaczej po porcie stary interfejs
       // twierdziłby, że zmiany wciąż czekają na wysłanie.
@@ -367,7 +381,7 @@
           // odrzuci również wymuszony zapis.
           const m = /wersja (\d+)/.exec(msg);
           if (m) bSet(VER_KEY, m[1]);
-          return push(true);
+          return pushJeden(true);   // NIE push(): czekałby na samego siebie
         }
         return false;
       }
@@ -422,7 +436,7 @@
           'Anuluj = zostaw dane lokalne i wyślij je do chmury.';
         if (!interactive || !confirm(t)) {
           ORG.pullSkipped = 'chmura ma mniej danych niż ten komputer (' + zChmury + ' vs ' + lokalnie + ')';
-          bSet(DIRTY_KEY, '1');            // oznacz do wysłania, żeby nie zginęły
+          bSet(DIRTY_KEY, '1'); orgGen++;  // oznacz do wysłania, żeby nie zginęły
           if (interactive) alert('Nic nie nadpisałem. Kliknij „⬆ Wyślij do chmury", ' +
             'żeby wysłać dane z tego komputera.');
           return;
@@ -1260,6 +1274,7 @@
       }
       if (typeof applyingCloudState !== 'undefined' && applyingCloudState) return;  // to my właśnie wczytujemy
       bSet(DIRTY_KEY, '1');
+      orgGen++;
       clearTimeout(orgPushTimer);
       orgPushTimer = setTimeout(function () { push(false); }, 2500);
       if (typeof updateSyncStatusUI === 'function') updateSyncStatusUI();
