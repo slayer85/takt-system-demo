@@ -450,10 +450,24 @@
   }
 
   /* ═══════════════ 4. URZĄDZENIA I WŁAŚCICIELE ═══════════════ */
+  /* Odcisk do porównania na głos liczymy LOKALNIE z klucza publicznego, na który
+     za chwilę zapieczętujemy kopertę. Wcześniej panel pokazywał odcisk podany przez
+     serwer — nieuczciwy serwer mógł podać prawdziwy odcisk razem z własnym kluczem
+     i porównanie na głos niczego by nie wykryło (P0-8, 1.10.2026).
+     Rozbieżność serwer ↔ klucz = przerwanie, bez pytania.                       */
+  async function odciskZKlucza(pubJwk, odciskSerwera) {
+    const fp = await K.fingerprint(pubJwk);
+    if (odciskSerwera && odciskSerwera !== fp) {
+      throw new Error('⚠ Serwer podał odcisk ' + odciskSerwera + ', a klucz, który przysłał, ma odcisk ' + fp +
+        '.\n\nPrzerywam — to może oznaczać podstawiony klucz. Nikogo nie wpuściłem.');
+    }
+    return fp;
+  }
   async function approveByCode(code) {
     try {
       const d = await rpc('device_by_code', { p_code: String(code || '').replace(/\D/g, '') });
-      if (!confirm('Wpuścić urządzenie „' + (d.label || d.device_id) + '"?\n\nNa tamtym ekranie powinien być odcisk:\n' + d.fingerprint)) return;
+      const fp = await odciskZKlucza(d.pub_jwk, d.fingerprint);
+      if (!confirm('Wpuścić urządzenie „' + (d.label || d.device_id) + '"?\n\nNa tamtym ekranie powinien być odcisk:\n' + fp)) return;
       const privJwk = await K.exportPrivJwk(ORG.vault.identityPriv);
       const wrap = await K.sealTo(d.pub_jwk, new TextEncoder().encode(JSON.stringify(privJwk)), 'device');
       await rpc('approve_device', { p_device_id: d.device_id, p_wrap: wrap });
@@ -464,11 +478,13 @@
   }
 
   async function grantOwner(email, fingerprint) {
-    if (!confirm('Wpuścić ' + email + ' do WSZYSTKICH danych szkoły?\n\nNajpierw potwierdźcie na głos, że ta osoba widzi u siebie odcisk:\n' +
-      fingerprint + '\n\nJeśli odcisk się nie zgadza, NIE wpuszczaj — może oznaczać podstawiony klucz.')) return;
     try {
+      // Klucz pobieramy PRZED pytaniem, żeby pokazać odcisk policzony z niego tutaj.
       const pk = await rpc('get_public_key', { p_email: email });
       if (pk.fingerprint !== fingerprint) { alert('Odcisk zmienił się w trakcie — przerywam. Spróbuj ponownie i porównajcie od nowa.'); return; }
+      const fp = await odciskZKlucza(pk.pub_jwk, pk.fingerprint);
+      if (!confirm('Wpuścić ' + email + ' do WSZYSTKICH danych szkoły?\n\nNajpierw potwierdźcie na głos, że ta osoba widzi u siebie odcisk:\n' +
+        fp + '\n\nJeśli odcisk się nie zgadza, NIE wpuszczaj — może oznaczać podstawiony klucz.')) return;
       const raw = new Uint8Array(await K.exportSym(ORG.vault.orgKey));
       const wrap = await K.sealTo(pk.pub_jwk, raw, 'org');
       await rpc('grant_owner', { p_email: email, p_wrap: wrap });
@@ -649,12 +665,13 @@
   async function grantStaff(email, branch, fingerprint) {
     const slot = ORG.vault.branch(branch);
     if (!slot) { alert('Nie mam otwartego klucza filii „' + branch + '" — przełącz się na nią i spróbuj ponownie.'); return; }
-    if (!confirm('Dać kontu ' + email + ' dostęp do danych filii „' + branch + '"?\n\n' +
-      'Najpierw potwierdźcie na głos odcisk:\n' + fingerprint +
-      '\n\nTo konto NIE dostanie klucza organizacji — pozostałych filii nie odczyta.')) return;
     try {
       const pk = await rpc('get_public_key', { p_email: email });
       if (pk.fingerprint !== fingerprint) { alert('Odcisk zmienił się w trakcie — przerywam. Porównajcie od nowa.'); return; }
+      const fp = await odciskZKlucza(pk.pub_jwk, pk.fingerprint);
+      if (!confirm('Dać kontu ' + email + ' dostęp do danych filii „' + branch + '"?\n\n' +
+        'Najpierw potwierdźcie na głos odcisk:\n' + fp +
+        '\n\nTo konto NIE dostanie klucza organizacji — pozostałych filii nie odczyta.')) return;
       const raw = new Uint8Array(await K.exportSym(slot.key));
       const wrap = await K.sealTo(pk.pub_jwk, raw, 'staff');
       await rpc('grant_staff', { p_email: email, p_branch: branch, p_branch_gen: slot.gen, p_wrap: wrap });
@@ -798,6 +815,7 @@
     if (!ORG.vault.orgKey) { alert('Ta operacja wymaga klucza organizacji — zaloguj się jako właściciel.'); return; }
     if (!confirm('Odebrać ' + email + ' dostęp do WSZYSTKICH danych szkoły?\n\n' +
       'Przeszyfruję paczki wszystkich filii i wygeneruję NOWY klucz odzyskiwania — stary wydruk przestanie działać.\n\n' +
+      'Ta osoba znika też z listy właścicieli — po wylogowaniu nie wejdzie już do panelu.\n\n' +
       'Uczciwie: to odbiera dostęp do PRZYSZŁYCH zapisów. Kopii, którą ta osoba zdążyła zapisać wcześniej, nie odbierze żaden klucz.')) return;
     revokeRunning = true;
     const warn = 'Od tej chwili ' + esc(email) + ' nie przeczyta <b>nowych</b> zapisów. ' +
