@@ -2,7 +2,7 @@
    PTT Scout na stronie zapisów par — WERSJA TESTOWA (demo, 2.10.2026)
 
    Trzecia ikona w pasku bocznym (obok lekcji i szkoleń) z rozwijanym menu:
-   Ranking PTT · Forma par · Historia pary · Kalendarz turniejów.
+   Ranking PTT · Historia pary · Kalendarz turniejów.
 
    DANE SĄ FIKCYJNE — generowane tutaj, w przeglądarce, z ziarna losowania. Ani jedno
    nazwisko nie pochodzi z bazy PTT ani z bazy Scouta. Powód: demo jest publiczne, a baza
@@ -187,7 +187,6 @@
   .sc-klub{ font-size:.74rem; color:var(--muted) }
   .sc-szk{ display:inline-block; font-size:.66rem; font-weight:800; color:var(--gold); border:1px solid var(--gold);
     border-radius:20px; padding:1px 7px; margin-left:6px; vertical-align:1px }
-  .sc-up{ color:#1f7a3f; font-weight:700 } .sc-down{ color:#b3261e; font-weight:700 } .sc-cichy{ color:#b8b2a8 }
   .sc-plus{ font-size:.72rem; color:var(--muted); margin-left:3px }
   .sc-kafle{ display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin:10px 0 14px }
   .sc-kafel{ background:#fafafa; border:1px solid var(--border); border-radius:10px; padding:10px 12px }
@@ -217,7 +216,6 @@
       <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 0 5H7M17 6h2.5a2.5 2.5 0 0 1 0 5H17"/></svg>`;
   const WIDOKI = [
     ['ranking', 'Ranking PTT', 'punkty Grand Prix i Ligi Seniorów'],
-    ['forma', 'Forma par', 'kto z kim wygrywa — ocena i forma'],
     ['para', 'Historia pary', 'starty, awanse, oś kariery'],
     ['kalendarz', 'Kalendarz turniejów', 'terminy zgłoszeń, kto jedzie'],
   ];
@@ -284,10 +282,10 @@
   function rysuj() {
     const D = dane(), box = document.getElementById('scoutView');
     const [, tytul, opis] = WIDOKI.find(x => x[0] === stan.widok);
-    const tresc = { ranking: wRanking, forma: wForma, para: wPara, kalendarz: wKalendarz }[stan.widok](D);
+    const tresc = { ranking: wRanking, para: wPara, kalendarz: wKalendarz }[stan.widok](D);
     box.innerHTML = `<div class="card">
       <div class="sc-baner">🧪 <span><b>Wersja testowa, dane przykładowe.</b> Pary, kluby i wyniki są fikcyjne — tak wyglądałby moduł PTT Scout w Waszej szkole.</span></div>
-      ${stan.pin ? `<div class="sc-grupa">Wasz PIN: <b>${GRUPY[stan.pin].nazwa}</b> · kategorie ${GRUPY[stan.pin].opis}</div>`
+      ${stan.pin ? '' // PIN grupy: bez paska „Wasz PIN” (2.10) — grupa wynika z PIN-u
         : `<div class="sc-grupa"><div class="seg">${Object.entries(GRUPY).map(([k, g]) =>
             `<button type="button" class="seg-btn${stan.grupa === k ? ' active' : ''}" data-grupa="${k}">${g.nazwa} · ${g.opis}</button>`).join('')}</div>
             <span class="sc-klub">PIN ogólny — widać obie grupy. PIN seniorów albo juniorów pokazuje tylko swoją.</span></div>`}
@@ -322,23 +320,6 @@
         <td class="num">${i + 1}</td><td>${nazwaPary(x.p)}</td><td>${x.klasa}</td>
         <td class="num">${x.startow}</td><td class="num" title="${x.prog ? 'do awansu do klasy ' + KLASY[KLASY.indexOf(x.klasa) + 1] + ': ' + x.prog + ' premii' : 'klasa B — bez progu awansu w regulaminie'}">${x.prog ? `${x.premium} / ${x.prog}` : x.premium}</td><td class="num"><b>${x.gpx}</b></td>${sen ? `<td class="num"><b>${x.ls}</b></td>` : ''}</tr>`).join('')}</tbody></table></div>`
         : '<div class="empty">Brak punktów w tym wycinku.</div>'}`;
-  }
-
-  function wForma(D) {
-    const wiersze = paryGrupy(D).filter(p => p.przedzial === stan.przedzial)
-      .map(p => ({ p, o: D.ocena[p.klucz + stan.styl], klasa: D.klasa(p, stan.styl) }))
-      .filter(x => x.o && (!stan.klasa || x.klasa === stan.klasa)).sort((a, b) => b.o.ostrozna - a.o.ostrozna);
-    const forma = f => f == null ? '<span class="sc-cichy">—</span>'
-      : f >= .05 ? `<span class="sc-up">▲ +${f.toFixed(1).replace('.', ',')}</span>`
-      : f <= -.05 ? `<span class="sc-down">▼ −${Math.abs(f).toFixed(1).replace('.', ',')}</span>` : '0,0';
-    return `<p class="hint" style="margin:0">Liczy się, <b>kogo para pokonała</b>, a nie samo miejsce. Ocena 1500 = para przeciętna.
-      <b>Forma</b>: ile par więcej (▲) albo mniej (▼) para pokonała w ostatnich 3 miesiącach, niż się spodziewano. To nie jest ranking PTT.</p>
-      ${filtry(true)}
-      <div class="sc-tab"><table><thead><tr><th>#</th><th>Para</th><th>Kl.</th><th class="num">Ocena</th><th class="num">Forma</th><th class="num">Startów</th></tr></thead>
-      <tbody>${wiersze.map((x, i) => `<tr class="${x.p.klub === SZKOLA ? 'nasza' : ''}" data-para="${x.p.klucz}" style="cursor:pointer">
-        <td class="num">${i + 1}</td><td>${nazwaPary(x.p)}</td><td>${x.klasa}</td>
-        <td class="num"><b>${x.o.ocena}</b><span class="sc-plus">±${x.o.niepewnosc}</span></td>
-        <td class="num">${forma(x.o.forma)}</td><td class="num">${x.o.startow}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function wPara(D) {
