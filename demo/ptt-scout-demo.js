@@ -42,8 +42,9 @@
     return g === 'senior' ? 'S' : (g === 'junior' || g === 'sport') ? 'M' : null;   // null = PIN ogólny
   };
   const PROG_AWANSU = { F: 5, E: 7, D: 8, C: 10 };                          // jak w regulaminie PTT
-  // Podpis kolumny punktów: seniorzy punktują w Lidze Seniorów (LS), młodzież w Grand Prix Polski (GPX).
-  const punktyNaglowek = g => g === 'S' ? 'Punkty LS' : 'Punkty GPX';
+  // Cykl, z którego są punkty startu: Grand Prix (GP dla młodzieży, GPPS dla seniorów) = GPX,
+  // Liga Seniorów = LS. Seniorzy zbierają punkty w OBU cyklach — stąd dwie kolumny w ich rankingu.
+  const cykl = ranga => ranga === 'LS' ? 'LS' : (ranga === 'GP' || ranga === 'GPPS') ? 'GPX' : '';
   const PROGI = [[3,1],[5,2],[7,3],[9,4],[11,5],[13,6],[16,7],[19,8],[22,9],[25,10],[28,11],[1e9,12]];
   const progPremium = n => { if (n < 2) return 0; for (const [mx, pl] of PROGI) if (n <= mx) return pl; return 12; };
   const iso = d => d.toISOString().slice(0, 10);
@@ -304,19 +305,22 @@
     const rok = String(new Date().getFullYear());
     const wiersze = paryGrupy(D).filter(p => p.przedzial === stan.przedzial).map(p => {
       const s = D.starty[p.klucz].filter(x => x.styl === stan.styl && x.data.startsWith(rok) && x.punkty != null);
-      return { p, startow: s.length, punkty: s.reduce((a, x) => a + x.punkty, 0),
+      const gpx = s.filter(x => cykl(x.ranga) === 'GPX').reduce((a, x) => a + x.punkty, 0);
+      const ls = s.filter(x => cykl(x.ranga) === 'LS').reduce((a, x) => a + x.punkty, 0);
+      return { p, startow: s.length, punkty: gpx + ls, gpx, ls,
                // Premie liczą się do awansu w OBECNEJ klasie (po awansie licznik startuje od zera) — „ma / potrzebuje”.
                premium: p.styl[stan.styl].prem, prog: PROG_AWANSU[D.klasa(p, stan.styl)] || null,
                klasa: D.klasa(p, stan.styl) };
-    }).filter(x => x.punkty > 0 && (!stan.klasa || x.klasa === stan.klasa)).sort((a, b) => b.punkty - a.punkty);
+    }).filter(x => x.punkty > 0 && (!stan.klasa || x.klasa === stan.klasa)).sort((a, b) => (b.gpx - a.gpx) || (b.ls - a.ls));
+    const sen = stan.grupa === 'S';
     return `<p class="hint" style="margin:0">Sezon ${rok}. ${stan.grupa === 'S'
-        ? 'Punkty naliczają się tylko na Grand Prix Polski Senior i w Lidze Seniorów — każdy styl osobno.'
+        ? 'Seniorzy zbierają punkty w dwóch cyklach: Grand Prix Polski Senior (GPX) i Liga Seniorów (LS) — każdy styl osobno. Kolejność według punktów GPX.'
         : 'Punkty naliczają się na turniejach Grand Prix Polski — każdy styl osobno.'}</p>
       ${filtry(true)}
-      ${wiersze.length ? `<div class="sc-tab"><table><thead><tr><th>#</th><th>Para</th><th>Kl.</th><th class="num">Startów</th><th class="num" title="Punkty premiowe zdobyte w obecnej klasie / ile potrzeba do awansu">Premium<br><small>ma / potrzebuje</small></th><th class="num">${punktyNaglowek(stan.grupa)}</th></tr></thead>
+      ${wiersze.length ? `<div class="sc-tab"><table><thead><tr><th>#</th><th>Para</th><th>Kl.</th><th class="num">Startów</th><th class="num" title="Punkty premiowe zdobyte w obecnej klasie / ile potrzeba do awansu">Premium<br><small>ma / potrzebuje</small></th><th class="num">Punkty GPX</th>${sen ? '<th class="num">Punkty LS</th>' : ''}</tr></thead>
       <tbody>${wiersze.map((x, i) => `<tr class="${x.p.klub === SZKOLA ? 'nasza' : ''}" data-para="${x.p.klucz}" style="cursor:pointer">
         <td class="num">${i + 1}</td><td>${nazwaPary(x.p)}</td><td>${x.klasa}</td>
-        <td class="num">${x.startow}</td><td class="num" title="${x.prog ? 'do awansu do klasy ' + KLASY[KLASY.indexOf(x.klasa) + 1] + ': ' + x.prog + ' premii' : 'klasa B — bez progu awansu w regulaminie'}">${x.prog ? `${x.premium} / ${x.prog}` : x.premium}</td><td class="num"><b>${x.punkty}</b></td></tr>`).join('')}</tbody></table></div>`
+        <td class="num">${x.startow}</td><td class="num" title="${x.prog ? 'do awansu do klasy ' + KLASY[KLASY.indexOf(x.klasa) + 1] + ': ' + x.prog + ' premii' : 'klasa B — bez progu awansu w regulaminie'}">${x.prog ? `${x.premium} / ${x.prog}` : x.premium}</td><td class="num"><b>${x.gpx}</b></td>${sen ? `<td class="num"><b>${x.ls}</b></td>` : ''}</tr>`).join('')}</tbody></table></div>`
         : '<div class="empty">Brak punktów w tym wycinku.</div>'}`;
   }
 
@@ -364,11 +368,11 @@
       <h3 style="margin:18px 0 4px;font-size:1.05rem">${esc(p.partner)} / ${esc(p.partnerka)}</h3>
       <div class="sc-klub">${esc(p.klub)} · kategoria ${esc(p.przedzial)}</div>
       ${osKariery(s)}${styl('ST')}${styl('LA')}
-      <div class="sc-tab" style="margin-top:6px"><table><thead><tr><th>Data</th><th>Turniej</th><th>Kategoria</th><th class="num">Miejsce</th><th class="num">Obsada</th><th class="num">${punktyNaglowek(GRUPY.S.przedzialy.includes(p.przedzial) ? 'S' : 'M')}</th></tr></thead>
+      <div class="sc-tab" style="margin-top:6px"><table><thead><tr><th>Data</th><th>Turniej</th><th>Kategoria</th><th class="num">Miejsce</th><th class="num">Obsada</th><th class="num">Punkty</th></tr></thead>
       <tbody>${s.slice().reverse().slice(0, 40).map(x => `<tr><td>${x.data}</td>
         <td>${esc(x.turniej)}<div class="sc-klub">${esc(x.miasto)}</div></td>
         <td>${x.przedzial} ${x.klasa} ${x.styl}${x.nowa_klasa ? ` <span class="sc-szk">awans → ${x.nowa_klasa}</span>` : ''}</td>
-        <td class="num">${x.miejsce ?? '—'}</td><td class="num">${x.obsada}</td><td class="num">${x.punkty ?? '—'}</td></tr>`).join('')}</tbody></table></div>`;
+        <td class="num">${x.miejsce ?? '—'}</td><td class="num">${x.obsada}</td><td class="num">${x.punkty != null ? `${x.punkty} <small class="sc-klub" style="display:inline">${cykl(x.ranga)}</small>` : '—'}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   // Oś kariery — ta sama idea co w Scoucie: tor na styl, wyżej = więcej pokonanych,
