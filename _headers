@@ -20,13 +20,22 @@
 # HTML zawsze świeży — apka się zmienia, a origin musi zostać ten sam (localStorage jest per-origin).
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
+# Pages ucina „.html” (308), więc panel i strony żyją pod adresami BEZ rozszerzenia —
+# reguła wyżej ich nie łapała (P3-3, 1.10.2026). Te same nagłówki dla adresów, pod którymi
+# naprawdę wchodzą ludzie: korzeń (Team), /takt-panel, /zapisy/, /trener/ i strona par Teamu.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/takt-panel
+  Cache-Control: public, max-age=0, must-revalidate
+/*/
+  Cache-Control: public, max-age=0, must-revalidate
 
 # supabase.js jest self-hostowany i praktycznie nieruchomy.
 /*supabase.js
   Cache-Control: public, max-age=86400
 
 # orgkey.js i orgkey-panel.js są ładowane Z NUMEREM WERSJI w adresie
-# (`orgkey.js?v=5`, podnoszonym razem z `CONTRACT`), więc adres zmienia się
+# (`orgkey.js?v=<skrót treści>`, liczonym przez build od 1.10.2026), więc adres zmienia się
 # przy każdej zmianie treści. To pozwala — i każe — cache'ować je NA DŁUGO:
 # przeglądarka nigdy nie poda starego pliku pod nowym adresem.
 #
