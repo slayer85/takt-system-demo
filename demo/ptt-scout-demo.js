@@ -15,8 +15,10 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
-  if (typeof TAKT_CONFIG === 'undefined' || !TAKT_CONFIG.scout) return;
-  const SZKOLA = TAKT_CONFIG.schoolName || 'Studio Demo TAKT';
+  // Tryb „tylko dane” (pulpit właściciela w panelu, 22.10.2026): ten sam generator, bez ikony i widoków.
+  const TYLKO_DANE = !!window.PTT_TYLKO_DANE;
+  if (!TYLKO_DANE && (typeof TAKT_CONFIG === 'undefined' || !TAKT_CONFIG.scout)) return;
+  const SZKOLA = (typeof TAKT_CONFIG !== 'undefined' && TAKT_CONFIG.schoolName) || 'Studio Demo TAKT';
 
   // ── Dane przykładowe ─────────────────────────────────────────────────────
   // Deterministyczne (stałe ziarno), żeby każdy prospekt zobaczył to samo, a daty
@@ -423,5 +425,40 @@
     });
   }
 
+  window.PTTDemoDane = () => Object.assign({ szkola: SZKOLA, grupy: GRUPY, etykieta: ETYKIETA }, dane());
+  // „Tańce par” w panelu (22.10.2026): dane w formacie rpc klub_tance (P · zestawy · turniej),
+  // zbudowane z TYCH SAMYCH fikcyjnych par co ranking i kalendarz — demo pokazuje spójny klub.
+  // Siła per taniec = siła pary w stylu ± odchylenie tańca (stałe ziarno → co dzień to samo).
+  window.PTTDemoTance = function () {
+    const D = dane(), r = los(20261022), g = () => { let x = 0; for (let i = 0; i < 6; i++) x += r(); return (x - 3) / Math.sqrt(.5); };
+    const TANCE = { ST: ['WA', 'T', 'WW', 'F', 'Q'], LA: ['CC', 'S', 'R', 'PD', 'JV'] };
+    const P = [], idx = {};
+    for (const p of D.pary) for (const st of ['ST', 'LA']) {
+      const o = D.ocena[p.klucz + st]; if (!o) continue;
+      const t = {}, n = 12 + Math.round(o.startow * (14 + r() * 10));
+      const odch = TANCE[st].map(() => g() * 42), sr = odch.reduce((a, b) => a + b, 0) / odch.length;
+      TANCE[st].forEach((k, i) => { t[k] = [Math.round(odch[i] - sr), Math.max(4, n - Math.round(r() * 10))]; });
+      idx[p.klucz + st] = P.length;
+      P.push({ k: p.klub, n: p.partner + ' & ' + p.partnerka, s: o.ocena, u: o.niepewnosc, t });
+    }
+    const zestawy = []; let id = 1;
+    for (const p of D.pary.filter(x => x.klub === SZKOLA)) for (const st of ['ST', 'LA']) {
+      const my = idx[p.klucz + st]; if (my === undefined) continue;
+      const st2 = D.pary.filter(x => x.przedzial === p.przedzial && x.styl[st].ki === p.styl[st].ki && idx[x.klucz + st] !== undefined).map(x => idx[x.klucz + st]);
+      zestawy.push({ id: id++, my, st: st2, para: p.partner + ' & ' + p.partnerka, styl: st, klasa: D.klasa(p, st), przedzial: p.przedzial });
+    }
+    // Przed turniejem: najbliższy turniej, kategorie z naszymi parami — stawka z par tej kategorii.
+    const dzis = iso(new Date()), T = (D.kalendarz || []).find(t => t.data >= dzis && t.kategorie.some(k => k.nasze.length));
+    const turniej = !T ? [] : T.kategorie.filter(k => k.nasze.length).slice(0, 6).map(k => {
+      const pula = D.pary.filter(x => x.przedzial === k.przedzial && D.klasa(x, k.styl) === k.klasa && idx[x.klucz + k.styl] !== undefined);
+      const st = pula.map(x => idx[x.klucz + k.styl]).slice(0, Math.max(k.zgloszonych, 2));
+      return { st, data: dm(T.data), styl: k.styl, obsada: st.length, turniej: T.nazwa, naglowek: (ETYKIETA[k.przedzial] || k.przedzial) + ' ' + k.klasa + ' ' + k.styl };
+    });
+    return { P, zestawy, turniej, na_dzien: dm(dzis) + '.' + dzis.slice(0, 4), policzono: new Date().toISOString(),
+      opcje: { klub: SZKOLA, dopisek: 'DANE PRZYKŁADOWE — demo, fikcyjne pary', lsKlucz: 'takt_tance_par_demo', domyslna: '',
+        naglowekC: T ? 'Przed turniejem · ' + dm(T.data) : 'Przed turniejem',
+        kolej: ['Juniorzy (do 15)', 'Młodzież (16–18)', 'Dorośli i Pre-Senior (19–29)', 'Seniorzy (30+)'] } };   // kolej: progi jak w tance-par.js (16 / 19 / 30)
+  };
+  if (TYLKO_DANE) return;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wepnij); else wepnij();
 })();
