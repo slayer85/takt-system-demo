@@ -1319,6 +1319,26 @@
   ORG.grantStaff = grantStaff;
   ORG.revokeOwner = revokeOwner;
   ORG.revokeStaff = revokeStaff;
+  /* Pulpit właściciela (22.10.2026): paczki filii TYLKO DO ODCZYTU — pobranie,
+     odszyfrowanie i oddanie obiektów. Nic nie zapisuje, nie rusza wersji ani
+     znacznika „do wysłania”, więc można to wołać z widoku zbiorczego bez ryzyka
+     dla danych filii. Filia bez klucza w skarbcu (pracownik innej filii) albo
+     bez paczki w chmurze wraca z polem `brak` zamiast obiektu. */
+  ORG.paczkiFilii = async function (nazwy) {
+    const out = {};
+    for (const b of nazwy) {
+      const slot = ORG.vault && ORG.vault.branch(b);
+      if (!slot) { out[b] = { brak: 'brak klucza tej filii na tym urządzeniu' }; continue; }
+      try {
+        const row = await rpc('state_load_v2', { p_branch: b || null });
+        if (!row || !row.data) { out[b] = { brak: 'filia nie wysłała jeszcze danych do chmury' }; continue; }
+        const key = (slot.keys && slot.keys[row.data.gen]) || slot.key;
+        out[b] = { obj: await K.decryptPack(key, row.data, b, row.data.gen, null),
+                   savedAt: row.saved_at || '', device: row.device || '' };
+      } catch (e) { out[b] = { brak: 'nie udało się odczytać: ' + (e.message || e) }; }
+    }
+    return out;
+  };
   ORG.reopen = async function () {
     ORG.vaultError = null; ORG.bootError = null;
     try {
