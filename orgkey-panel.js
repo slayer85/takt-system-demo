@@ -61,6 +61,9 @@
   const FP_KEY = 'takt_org_fp';
 
   const sbAuth = () => window.TAKT_SB || null;
+  // Komunikaty błędów (23.10.2026): panel z tłumaczem (demo) pokazuje okno „co się stało / co zrobić”;
+  // panel bez niego — dokładnie jak dotąd alert z tekstem błędu.
+  const pokazBlad = (wstep, e) => { if (window.taktPokazBlad) window.taktPokazBlad(e, { wstep: wstep, gdzie: 'Chmura+' }); else alert((wstep ? wstep + ': ' : '') + ((e && e.message) || e)); };
   const br = () => (typeof currentBranch !== 'undefined' && currentBranch) ? currentBranch : '';
   const bInfo = (n) => 'branch:' + (n || 'main') + ':';
   /* ⚠️ `LSgetB`/`LSsetB` (localStorage z segmentem filii) istnieją TYLKO
@@ -300,7 +303,7 @@
       await push(true);
       ORG.boot = await rpc('key_bootstrap', { p_device_id: ORG.dev.device_id });
       if (rk) showRecovery(rk); else { renderOrgUI(); alert('Chmura+ włączona dla „' + nazwa + '".'); }
-    } catch (e) { alert('Nie udało się włączyć Chmury+: ' + (e.message || e)); }
+    } catch (e) { pokazBlad('Nie udało się włączyć Chmury+', e); }
   }
 
   function showRecovery(rk) {
@@ -446,7 +449,7 @@
       applyCloudState({ data: obj, updated_at: row.updated_at, device: row.device, saved_at: row.saved_at });
       bSet(VER_KEY, String(row.data.version));
       if (interactive) alert('Wczytano dane z chmury (wersja ' + row.data.version + ').');
-    } catch (e) { if (interactive) alert('Nie udało się wczytać: ' + (e.message || e)); else console.warn('[orgkey] odczyt:', e.message || e); }
+    } catch (e) { if (interactive) pokazBlad('Nie udało się wczytać', e); else console.warn('[orgkey] odczyt:', e.message || e); }
   }
 
   /* ═══════════════ 4. URZĄDZENIA I WŁAŚCICIELE ═══════════════ */
@@ -474,7 +477,7 @@
       alert('Wpuszczone. Na tamtym urządzeniu odśwież panel.');
       ORG.boot = await rpc('key_bootstrap', { p_device_id: ORG.dev.device_id });
       renderOrgUI();
-    } catch (e) { alert(e.message || e); }
+    } catch (e) { pokazBlad('', e); }
   }
 
   async function grantOwner(email, fingerprint) {
@@ -491,7 +494,7 @@
       alert(email + ' ma dostęp. Danych nie szyfrowałem od nowa — doszła jedna koperta.\n\nNiech odświeży panel.');
       ORG.boot = await rpc('key_bootstrap', { p_device_id: ORG.dev.device_id });
       renderOrgUI();
-    } catch (e) { alert(e.message || e); }
+    } catch (e) { pokazBlad('', e); }
   }
 
   /* ═══════════════ 5. INTERFEJS — w istniejącym oknie „Chmura i konto" ═══════════════ */
@@ -677,7 +680,7 @@
       await rpc('grant_staff', { p_email: email, p_branch: branch, p_branch_gen: slot.gen, p_wrap: wrap });
       alert(email + ' ma dostęp do filii „' + branch + '".\n\nNiech odświeży panel.');
       renderChmuraTab();
-    } catch (e) { alert(e.message || e); }
+    } catch (e) { pokazBlad('', e); }
   }
 
   /* Odebranie dostępu JEDNEMU urządzeniu — zgubiony telefon, sprzedany laptop.
@@ -711,7 +714,7 @@
       alert('Dostęp odebrany.' + (r.remaining
         ? ' Temu kontu zostaje ' + r.remaining + ' ' + (r.remaining === 1 ? 'urządzenie.' : 'urządzeń.')
         : ' To konto nie ma już żadnego wpuszczonego urządzenia.'));
-    } catch (e) { alert('Nie udało się: ' + (e.message || e)); }
+    } catch (e) { pokazBlad('Nie udało się', e); }
   }
 
   /* ═══════════════ 5bis. ODZYSKANIE Z WYDRUKU ═══════════════
@@ -1381,7 +1384,7 @@
       ORG.boot = await rpc('key_bootstrap', { p_device_id: ORG.dev.device_id });
       renderOrgUI();
       alert('Nowa tożsamość i nowe urządzenie gotowe.');
-    } catch (e) { alert('Nie udało się: ' + (e.message || e)); }
+    } catch (e) { pokazBlad('Nie udało się', e); }
   };
 
   /* ═══════════════ 7. START ═══════════════
