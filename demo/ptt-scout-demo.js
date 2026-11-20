@@ -19,6 +19,8 @@
   const TYLKO_DANE = !!window.PTT_TYLKO_DANE;
   if (!TYLKO_DANE && (typeof TAKT_CONFIG === 'undefined' || !TAKT_CONFIG.scout)) return;
   const SZKOLA = (typeof TAKT_CONFIG !== 'undefined' && TAKT_CONFIG.schoolName) || 'Studio Demo TAKT';
+  // Ranking Sportowy PTT u młodzieży (20.11.2026) — ten sam widok co produkt/ptt-scout.js z flagą scoutSportowy.
+  const SPORTOWY = typeof TAKT_CONFIG !== 'undefined' && TAKT_CONFIG.scoutSportowy === true;
 
   // ── Dane przykładowe ─────────────────────────────────────────────────────
   // Deterministyczne (stałe ziarno), żeby każdy prospekt zobaczył to samo, a daty
@@ -187,6 +189,8 @@
   .sc-tab .num{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap }
   .sc-tab tr.nasza td{ background:#fff4f2 } .sc-tab tr.nasza td:first-child{ box-shadow:inset 3px 0 0 var(--gold) }
   .sc-klub{ font-size:.74rem; color:var(--muted) }
+  .sc-cichy{ color:#b8b2a8 }
+  .sc-awans{ display:inline-block; margin-left:6px; font-size:.66rem; font-weight:800; padding:2px 7px; border-radius:20px; color:#1f7a3f; border:1px solid #9fd3b0; vertical-align:1px }
   .sc-szk{ display:inline-block; font-size:.66rem; font-weight:800; color:var(--gold); border:1px solid var(--gold);
     border-radius:20px; padding:1px 7px; margin-left:6px; vertical-align:1px }
   .sc-plus{ font-size:.72rem; color:var(--muted); margin-left:3px }
@@ -217,7 +221,7 @@
   const ikona = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 0 5H7M17 6h2.5a2.5 2.5 0 0 1 0 5H17"/></svg>`;
   const WIDOKI = [
-    ['ranking', 'Ranking PTT', 'punkty Grand Prix i Ligi Seniorów'],
+    ['ranking', 'Ranking PTT', SPORTOWY ? 'Ranking Sportowy, Grand Prix i Liga Seniorów' : 'punkty Grand Prix i Ligi Seniorów'],
     ['para', 'Historia pary', 'starty, awanse, oś kariery'],
     ['kalendarz', 'Kalendarz turniejów', 'terminy zgłoszeń, kto jedzie'],
   ];
@@ -301,7 +305,45 @@
     </div>`;
   const nazwaPary = p => `${esc(p.partner)} / ${esc(p.partnerka)}${p.klub === SZKOLA ? '<span class="sc-szk">nasza szkoła</span>' : ''}<div class="sc-klub">${esc(p.klub)}</div>`;
 
+  // Przepisy STT §6.5 — tabela punktów per poziom turnieju (I MP/Polish Open, II Grand Prix, III Mistrzostwa Okręgu, IV reszta).
+  // Dane demo są fikcyjne, więc poziom bierzemy z rodzaju turnieju w generatorze.
+  const TAB_RS = { 1: [[350,280,210,175,157.5,140,122.5,105,87.5,70,52.5,35], 0, 40], 2: [[200,160,120,100,90,80,70,60,50,40,30,20], 5, 30],
+                   3: [[150,120,90,75,67.5,60,52.5,45,37.5,30,22.5,15], 0, 20], 4: [[80,60,40,30,20,10,5,5,5,5,5,5], 3, 10] };
+  const poziomDemo = nazwa => /Grand Prix/.test(nazwa) ? 2 : /Okręgow/.test(nazwa) ? 3 : 4;
+  const pktRs = (poz, m, n) => { const [t, dalej, udz] = TAB_RS[poz];
+    return (m <= 12 ? t[m - 1] : m <= 24 ? dalej : 0) + udz + 2 * Math.max(0, n - m)
+      + (n <= 7 ? 0 : n <= 14 ? 5 : n <= 28 ? 10 : n <= 56 ? 15 : n <= 112 ? 20 : 25); };
+  // §10: po sezonie awans dla N najwyżej sklasyfikowanych par BEZ najwyższej klasy w kategorii (para z nią jest pomijana).
+  const AWANS10 = { '12-13': [2, 'C'], '14-15': [2, 'B'], '16-18': [2, 'S'], '19-24': [3, 'S'] };
+  const fmtRs = v => String(Math.round(v * 10) / 10).replace('.', ',');
+  function wRankingSportowy(D) {
+    const rok = String(new Date().getFullYear()), KOL = ['F', 'E', 'D', 'C', 'B', 'A', 'S'];
+    const wiersze = paryGrupy(D).filter(p => p.przedzial === stan.przedzial).map(p => {
+      const s = D.starty[p.klucz].filter(x => x.styl === stan.styl && x.data.startsWith(rok) && x.miejsce);
+      const rs = s.reduce((a, x) => a + pktRs(poziomDemo(x.turniej), x.miejsce, x.obsada), 0);
+      const gp = s.filter(x => poziomDemo(x.turniej) === 2).reduce((a, x) => a + pktRs(2, x.miejsce, x.obsada), 0);
+      return { p, startow: s.length, rs, gp, klasa: D.klasa(p, stan.styl),
+               premium: p.styl[stan.styl].prem, prog: PROG_AWANSU[D.klasa(p, stan.styl)] || null };
+    }).filter(x => x.rs > 0).sort((a, b) => b.rs - a.rs);
+    const a10 = AWANS10[stan.przedzial];
+    if (a10) wiersze.filter(x => KOL.indexOf(x.klasa) < KOL.indexOf(a10[1])).slice(0, a10[0]).forEach(x => { x.awans = true; });
+    const widoczne = wiersze.filter(x => !stan.klasa || x.klasa === stan.klasa);
+    const nasze = widoczne.filter(x => x.awans && x.p.klub === SZKOLA).length;
+    return `<p class="hint" style="margin:0">Sezon ${rok}. <b>Ranking Sportowy PTT</b> — punkty ze wszystkich turniejów
+        w konkurencjach OPEN, każdy styl osobno: Mistrzostwa Polski, Polish Open i Polish Cup liczą się najwyżej, potem Grand Prix
+        i turnieje międzynarodowe, Mistrzostwa Okręgu, na końcu pozostałe. ${a10
+        ? `Po sezonie awans o klasę dostają <b>${a10[0]}</b> najwyżej sklasyfikowane pary bez klasy ${a10[1]} (pary z tą klasą się pomija).`
+        : 'W tej kategorii ranking nie daje awansu.'}${nasze ? ` <b>W strefie awansu: ${nasze} ${nasze === 1 ? 'para' : 'pary'} Waszej szkoły.</b>` : ''}</p>
+      ${filtry(true)}
+      ${widoczne.length ? `<div class="sc-tab"><table><thead><tr><th>#</th><th>Para</th><th>Kl.</th><th class="num">Startów</th><th class="num" title="Punkty premiowe zdobyte w obecnej klasie / ile potrzeba do awansu">Premium<br><small>ma / potrzebuje</small></th><th class="num" title="Ranking Sportowy PTT — suma punktów z turniejów OPEN w sezonie">Ranking<br><small>sportowy</small></th><th class="num" title="W tym punkty z turniejów Grand Prix">w tym<br><small>GP</small></th></tr></thead>
+      <tbody>${widoczne.map((x, i) => `<tr class="${x.p.klub === SZKOLA ? 'nasza' : ''}" data-para="${x.p.klucz}" style="cursor:pointer">
+        <td class="num">${stan.klasa ? i + 1 : wiersze.indexOf(x) + 1}</td><td>${nazwaPary(x.p)}${x.awans ? '<span class="sc-awans" title="Miejsce dające awans po sezonie (§10)">awans §10</span>' : ''}</td><td>${x.klasa}</td>
+        <td class="num">${x.startow}</td><td class="num">${x.prog ? `${x.premium} / ${x.prog}` : x.premium}</td><td class="num"><b>${fmtRs(x.rs)}</b></td><td class="num sc-cichy">${x.gp ? fmtRs(x.gp) : '—'}</td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="empty">Brak punktów w tym wycinku.</div>'}`;
+  }
+
   function wRanking(D) {
+    if (SPORTOWY && stan.grupa === 'M') return wRankingSportowy(D);
     const rok = String(new Date().getFullYear());
     const wiersze = paryGrupy(D).filter(p => p.przedzial === stan.przedzial).map(p => {
       const s = D.starty[p.klucz].filter(x => x.styl === stan.styl && x.data.startsWith(rok) && x.punkty != null);
